@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fcf8ff;
+  --foreground: #1b1b24;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: 'Inter', sans-serif;
+
+  --color-primary: #3525cd;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #4f46e5;
+  --color-on-primary-container: #dad7ff;
+  --color-primary-fixed: #e2dfff;
+  --color-primary-fixed-dim: #c3c0ff;
+  --color-inverse-primary: #c3c0ff;
+
+  --color-secondary: #515f74;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #d5e3fc;
+  --color-on-secondary-container: #57657a;
+
+  --color-tertiary: #7e3000;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #a44100;
+  --color-on-tertiary-container: #ffd2be;
+
+  --color-surface: #fcf8ff;
+  --color-surface-bright: #fcf8ff;
+  --color-surface-dim: #dcd8e5;
+  --color-surface-variant: #e4e1ee;
+  --color-surface-tint: #4d44e3;
+  --color-surface-container: #f0ecf9;
+  --color-surface-container-low: #f5f2ff;
+  --color-surface-container-high: #eae6f4;
+  --color-surface-container-highest: #e4e1ee;
+  --color-surface-container-lowest: #ffffff;
+
+  --color-on-surface: #1b1b24;
+  --color-on-surface-variant: #464555;
+  --color-inverse-surface: #302f39;
+  --color-inverse-on-surface: #f3effc;
+
+  --color-outline: #777587;
+  --color-outline-variant: #c7c4d8;
+
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: 'Inter', sans-serif;
+  min-height: max(884px, 100dvh);
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.security-bg {
+  background-image: radial-gradient(circle at 2px 2px, rgba(79, 70, 229, 0.05) 1px, transparent 0);
+  background-size: 32px 32px;
+}
+
+.markdown p { margin-bottom: 0.5rem; }
+.markdown p:last-child { margin-bottom: 0; }
+.markdown h1 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; }
+.markdown h2 { font-size: 1.125rem; font-weight: 600; margin-bottom: 0.5rem; }
+.markdown h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.375rem; }
+.markdown strong { font-weight: 600; }
+.markdown em { font-style: italic; }
+.markdown ul { list-style-type: disc; padding-left: 1.5rem; margin: 0.375rem 0; }
+.markdown ol { list-style-type: decimal; padding-left: 1.5rem; margin: 0.375rem 0; }
+.markdown li { margin: 0.2rem 0; }
+.markdown code { font-family: monospace; background: #f1f5f9; padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-size: 0.875em; }
+.markdown hr { border-color: #e2e8f0; margin: 0.75rem 0; }
