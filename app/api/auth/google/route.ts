@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 
 function baseUrl() {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`
-  return 'http://localhost:3000'
+  const raw =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+  return raw.replace(/\/+$/, '')
 }
 
 export async function GET(req: NextRequest) {
