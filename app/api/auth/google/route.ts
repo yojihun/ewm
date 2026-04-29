@@ -8,11 +8,15 @@ function baseUrl() {
 }
 
 export async function GET(req: NextRequest) {
+  const type = new URL(req.url).searchParams.get('type') === 'student' ? 'student' : 'teacher'
+  const errorRedirect = type === 'student' ? `${baseUrl()}/?error=oauth_not_configured` : `${baseUrl()}/admin?error=oauth_not_configured`
+
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
-    return NextResponse.redirect(`${baseUrl()}/admin?error=oauth_not_configured`)
+    return NextResponse.redirect(errorRedirect)
   }
 
-  const state = crypto.randomUUID()
+  // Encode auth type in state so callback knows which flow to complete
+  const state = `${type}:${crypto.randomUUID()}`
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,

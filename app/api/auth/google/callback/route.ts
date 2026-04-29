@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { findStudentByEmail } from '@/lib/students'
 
 const ALLOWED_EMAILS = (
   process.env.ALLOWED_TEACHER_EMAILS ||
@@ -21,13 +22,18 @@ export async function GET(req: NextRequest) {
   const oauthError = searchParams.get('error')
   const base = baseUrl()
 
+  const storedState = req.cookies.get('sf_oauth_state')?.value
+
+  // Parse type from state prefix (e.g. "teacher:uuid" or "student:uuid")
+  const authType = storedState?.startsWith('student:') ? 'student' : 'teacher'
+  const errorBase = authType === 'student' ? `${base}/` : `${base}/admin`
+
   if (oauthError || !code) {
-    return NextResponse.redirect(`${base}/admin?error=oauth_cancelled`)
+    return NextResponse.redirect(`${errorBase}?error=oauth_cancelled`)
   }
 
-  const storedState = req.cookies.get('sf_oauth_state')?.value
   if (!storedState || storedState !== state) {
-    return NextResponse.redirect(`${base}/admin?error=invalid_state`)
+    return NextResponse.redirect(`${errorBase}?error=invalid_state`)
   }
 
   try {
@@ -44,8 +50,30 @@ export async function GET(req: NextRequest) {
     const { data } = await oauth2Service.userinfo.get()
     const email = (data.email ?? '').toLowerCase()
 
+    if (authType === 'student') {
+      const student = findStudentByEmail(email)
+      if (!student) {
+        return NextResponse.redirect(
+          `${base}/?error=not_allowed&email=${encodeURIComponent(email)}`
+        )
+      }
+
+      const res = NextResponse.redirect(`${base}/`)
+      res.cookies.set('sf_student', JSON.stringify(student), {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        maxAge: 60 * 60 * 8,
+      })
+      res.cookies.delete('sf_oauth_state')
+      return res
+    }
+
+    // Teacher flow
     if (!ALLOWED_EMAILS.includes(email)) {
-      return NextResponse.redirect(`${base}/admin?error=not_allowed&email=${encodeURIComponent(email)}`)
+      return NextResponse.redirect(
+        `${base}/admin?error=not_allowed&email=${encodeURIComponent(email)}`
+      )
     }
 
     const res = NextResponse.redirect(`${base}/admin/dashboard`)
@@ -59,6 +87,6 @@ export async function GET(req: NextRequest) {
     return res
   } catch (err) {
     console.error('[google/callback]', err)
-    return NextResponse.redirect(`${base}/admin?error=auth_failed`)
+    return NextResponse.redirect(`${errorBase}?error=auth_failed`)
   }
 }

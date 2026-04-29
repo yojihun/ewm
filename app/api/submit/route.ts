@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { appendRow } from '@/lib/sheets'
-import { readConfig } from '@/lib/questions'
+import { getTask } from '@/lib/tasks'
 import { sendSubmissionEmail } from '@/lib/email'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const {
+    taskId,
     name,
     studentNumber,
     email,
@@ -18,6 +19,7 @@ export async function POST(req: NextRequest) {
     spotlightCount,
     duplicateSession,
   } = body as {
+    taskId: string
     name: string
     studentNumber: string
     email: string
@@ -35,6 +37,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Name and student number required' }, { status: 400 })
   }
 
+  if (!taskId) {
+    return NextResponse.json({ error: 'taskId is required' }, { status: 400 })
+  }
+
   const sheetsConfigured =
     process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
     process.env.GOOGLE_PRIVATE_KEY &&
@@ -47,8 +53,12 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const config = await readConfig()
-  const answerValues = config.questions.map((q) => answers[q.id] ?? '')
+  const task = await getTask(taskId)
+  if (!task) {
+    return NextResponse.json({ error: 'Task not found' }, { status: 404 })
+  }
+
+  const answerValues = task.questions.map((q) => answers[q.id] ?? '')
 
   const row = [
     new Date().toISOString(),
@@ -66,7 +76,7 @@ export async function POST(req: NextRequest) {
   ]
 
   try {
-    await appendRow(config.title, row)
+    await appendRow(task.title, row)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('[submit] Google Sheets error:', message)
@@ -79,8 +89,8 @@ export async function POST(req: NextRequest) {
         to: email,
         studentName: name,
         studentNumber,
-        quizTitle: config.title,
-        questions: config.questions,
+        quizTitle: task.title,
+        questions: task.questions,
         answers,
         securityCounts: {
           tabSwitchCount: tabSwitchCount ?? 0,

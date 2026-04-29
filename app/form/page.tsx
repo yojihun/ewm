@@ -5,6 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import ReactMarkdown from 'react-markdown'
 import SecureTextarea from '@/components/SecureTextarea'
 
+interface Student {
+  studentNumber: string
+  name: string
+  email: string
+}
+
 interface Question {
   id: string
   text: string
@@ -27,10 +33,9 @@ function formatTime(seconds: number): string {
 function FormContent() {
   const router = useRouter()
   const params = useSearchParams()
-  const name = params.get('name') ?? ''
-  const studentNumber = params.get('studentNumber') ?? ''
-  const email = params.get('email') ?? ''
+  const taskId = params.get('taskId') ?? ''
 
+  const [student, setStudent] = useState<Student | null>(null)
   const [title, setTitle] = useState('Quiz')
   const [timeLimitSecs, setTimeLimitSecs] = useState(0)
   const [questions, setQuestions] = useState<Question[]>([])
@@ -71,10 +76,12 @@ function FormContent() {
   const spotlightRef = useRef(0)
   const duplicateSessionRef = useRef(false)
   const sessionTokenRef = useRef('')
+  const studentRef = useRef<Student | null>(null)
 
   useEffect(() => { answersRef.current = answers }, [answers])
   useEffect(() => { questionsRef.current = questions }, [questions])
   useEffect(() => { duplicateSessionRef.current = duplicateSession }, [duplicateSession])
+  useEffect(() => { studentRef.current = student }, [student])
 
   // Detect page refresh via PerformanceNavigationTiming and persist count in sessionStorage
   useEffect(() => {
@@ -89,9 +96,46 @@ function FormContent() {
     }
   }, [])
 
+  // Load student session and task
+  useEffect(() => {
+    if (!taskId) {
+      router.replace('/')
+      return
+    }
+
+    Promise.all([
+      fetch('/api/auth/student').then((r) => r.json()),
+      fetch(`/api/tasks/${taskId}`).then((r) => r.ok ? r.json() : null),
+    ])
+      .then(([sessionData, taskData]: [{ student: Student | null }, { title: string; timeLimit: number; questions: Question[] } | null]) => {
+        if (!sessionData.student) {
+          router.replace('/')
+          return
+        }
+        if (!taskData) {
+          router.replace('/')
+          return
+        }
+        setStudent(sessionData.student)
+        studentRef.current = sessionData.student
+        setTitle(taskData.title)
+        const secs = (taskData.timeLimit ?? 0) * 60
+        setTimeLimitSecs(secs)
+        setTimeLeft(secs)
+        setQuestions(taskData.questions)
+        const initial: Record<string, string> = {}
+        taskData.questions.forEach((q: Question) => (initial[q.id] = ''))
+        setAnswers(initial)
+        answersRef.current = initial
+        questionsRef.current = taskData.questions
+      })
+      .catch(() => router.replace('/'))
+      .finally(() => setLoading(false))
+  }, [taskId, router])
+
   // Session registration — detects duplicate logins from another device/browser
   useEffect(() => {
-    if (!studentNumber) return
+    if (!student) return
     const token =
       typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
         ? crypto.randomUUID()
@@ -101,7 +145,7 @@ function FormContent() {
     fetch('/api/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ studentNumber, sessionToken: token }),
+      body: JSON.stringify({ studentNumber: student.studentNumber, sessionToken: token }),
     })
       .then((r) => r.json())
       .then((data: { ok: boolean; duplicate: boolean }) => {
@@ -109,18 +153,17 @@ function FormContent() {
       })
       .catch(() => {})
 
-    // Deregister on tab close / navigation away (keepalive ensures it completes)
     const handleBeforeUnload = () => {
       fetch('/api/session', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentNumber, sessionToken: token }),
+        body: JSON.stringify({ studentNumber: student.studentNumber, sessionToken: token }),
         keepalive: true,
       }).catch(() => {})
     }
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [studentNumber])
+  }, [student])
 
   // Tab switching — fires when the browser tab/page becomes hidden
   useEffect(() => {
@@ -136,9 +179,7 @@ function FormContent() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  // App / virtual desktop switching — fires when window loses focus but tab stays visible.
-  // Uses a 150 ms delay so that a tab-switch (which also triggers blur before visibilitychange)
-  // is not double-counted: by 150 ms, document.hidden will already be true for tab switches.
+  // App / virtual desktop switching
   useEffect(() => {
     function handleWindowBlur() {
       if (submittingRef.current) return
@@ -171,13 +212,11 @@ function FormContent() {
     }
     function handleKeyDown(e: KeyboardEvent) {
       if (submittingRef.current) return
-      // Ctrl+A / Cmd+A — select-all counted as copy attempt
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         copyRef.current += 1
         setCopyCount(copyRef.current)
         setShowCopyWarning(true)
       }
-      // macOS Spotlight: Cmd+Space (browser may receive this before the OS captures it)
       if (e.metaKey && e.key === ' ') {
         spotlightRef.current += 1
         setSpotlightCount(spotlightRef.current)
@@ -196,30 +235,10 @@ function FormContent() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!name || !studentNumber || !email) {
-      router.replace('/')
-      return
-    }
-    fetch('/api/questions')
-      .then((r) => r.json())
-      .then((data: { title: string; timeLimit: number; questions: Question[] }) => {
-        setTitle(data.title)
-        const secs = (data.timeLimit ?? 0) * 60
-        setTimeLimitSecs(secs)
-        setTimeLeft(secs)
-        setQuestions(data.questions)
-        const initial: Record<string, string> = {}
-        data.questions.forEach((q) => (initial[q.id] = ''))
-        setAnswers(initial)
-        answersRef.current = initial
-        questionsRef.current = data.questions
-      })
-      .finally(() => setLoading(false))
-  }, [name, studentNumber, router])
-
   const doSubmit = useCallback(async (isAutoSubmit = false) => {
     if (submittingRef.current) return
+    const s = studentRef.current
+    if (!s) return
     submittingRef.current = true
     setSubmitting(true)
     if (intervalRef.current) clearInterval(intervalRef.current)
@@ -228,9 +247,10 @@ function FormContent() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name,
-        studentNumber,
-        email,
+        taskId,
+        name: s.name,
+        studentNumber: s.studentNumber,
+        email: s.email,
         answers: answersRef.current,
         tabSwitchCount: tabSwitchRef.current,
         copyCount: copyRef.current,
@@ -245,11 +265,11 @@ function FormContent() {
     setSubmitting(false)
     if (res.ok) {
       sessionStorage.removeItem('sf_refresh')
-      if (sessionTokenRef.current) {
+      if (sessionTokenRef.current && s) {
         fetch('/api/session', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ studentNumber, sessionToken: sessionTokenRef.current }),
+          body: JSON.stringify({ studentNumber: s.studentNumber, sessionToken: sessionTokenRef.current }),
         }).catch(() => {})
       }
       if (isAutoSubmit) setTimedOut(true)
@@ -259,7 +279,7 @@ function FormContent() {
       const data = await res.json().catch(() => ({}))
       setError(data.error ?? 'Submission failed. Please try again.')
     }
-  }, [name, studentNumber, email])
+  }, [taskId])
 
   useEffect(() => {
     if (!timerStarted || timeLimitSecs === 0) return
@@ -311,7 +331,7 @@ function FormContent() {
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
           <div className="mx-auto mb-3 h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          <p className="text-sm text-on-surface-variant">Loading questions…</p>
+          <p className="text-sm text-on-surface-variant">Loading…</p>
         </div>
       </div>
     )
@@ -322,13 +342,7 @@ function FormContent() {
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-slate-100">
           <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-            <svg
-              className="h-8 w-8 text-green-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2.5}
-            >
+            <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
             </svg>
           </div>
@@ -340,7 +354,7 @@ function FormContent() {
               ? 'Your answers were automatically submitted when time ran out.'
               : 'Your answers have been recorded.'}
           </p>
-          <p className="mt-2 text-sm font-medium text-on-surface">Thank you, {name}.</p>
+          <p className="mt-2 text-sm font-medium text-on-surface">Thank you, {student?.name}.</p>
         </div>
       </div>
     )
@@ -369,27 +383,17 @@ function FormContent() {
 
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex flex-col items-end mr-2">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-              Student
-            </span>
-            <span className="text-sm font-semibold text-on-surface">{name}</span>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Student</span>
+            <span className="text-sm font-semibold text-on-surface">{student?.name}</span>
           </div>
           {timeLimitSecs > 0 && (
-            <div
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors duration-500 ${timerClasses}`}
-            >
-              <span
-                className={`material-symbols-outlined text-[20px] ${veryUrgent ? 'animate-pulse' : ''}`}
-              >
-                timer
-              </span>
+            <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-colors duration-500 ${timerClasses}`}>
+              <span className={`material-symbols-outlined text-[20px] ${veryUrgent ? 'animate-pulse' : ''}`}>timer</span>
               <span className="font-mono text-lg font-semibold tabular-nums tracking-tight">
                 {timerStarted ? formatTime(timeLeft) : formatTime(timeLimitSecs)}
               </span>
               {!timerStarted && (
-                <span className="text-[10px] font-medium opacity-60 hidden lg:inline">
-                  starts on first keystroke
-                </span>
+                <span className="text-[10px] font-medium opacity-60 hidden lg:inline">starts on first keystroke</span>
               )}
             </div>
           )}
@@ -400,19 +404,14 @@ function FormContent() {
       <main className="pt-16 pb-10 px-4 md:px-12 lg:px-24">
         <div className="max-w-[720px] mx-auto space-y-6 py-8">
 
-          {/* Duplicate session warning — permanent, cannot be dismissed */}
+          {/* Duplicate session warning */}
           {duplicateSession && (
             <section className="bg-red-900 border border-red-700 rounded-xl p-5 flex gap-4 shadow-sm">
-              <span
-                className="material-symbols-outlined text-red-300 mt-0.5 shrink-0"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
+              <span className="material-symbols-outlined text-red-300 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
                 person_alert
               </span>
               <div>
-                <h4 className="font-bold text-red-100 text-sm">
-                  Duplicate Login Detected / 중복 접속 감지
-                </h4>
+                <h4 className="font-bold text-red-100 text-sm">Duplicate Login Detected / 중복 접속 감지</h4>
                 <p className="text-red-200/80 text-sm mt-1 leading-relaxed">
                   Your student number is already active in another session. This has been flagged and will be reported to your instructor.
                   <br />
@@ -424,16 +423,11 @@ function FormContent() {
 
           {/* Security warning banner */}
           <section className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex gap-4 shadow-sm">
-            <span
-              className="material-symbols-outlined text-amber-600 mt-0.5 shrink-0"
-              style={{ fontVariationSettings: "'FILL' 1" }}
-            >
+            <span className="material-symbols-outlined text-amber-600 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
               warning
             </span>
             <div>
-              <h4 className="font-bold text-amber-900 text-sm">
-                Security Warning: Anti-Cheat Protocol
-              </h4>
+              <h4 className="font-bold text-amber-900 text-sm">Security Warning: Anti-Cheat Protocol</h4>
               <p className="text-amber-800/80 text-sm mt-1 leading-relaxed">
                 The following actions are monitored and reported to your instructor: copying text, switching browser tabs or windows, switching to another virtual desktop (Mission Control / Windows virtual desktops), activating Spotlight or search tools (⌘Space), refreshing the page, and logging in from multiple devices at the same time.
                 <br />
@@ -446,21 +440,12 @@ function FormContent() {
           {showRefreshWarning && (
             <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
               <div className="flex gap-4">
-                <span
-                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  refresh
-                </span>
+                <span className="material-symbols-outlined text-red-500 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>refresh</span>
                 <p className="text-sm text-red-700 font-medium">
-                  페이지 새로고침이 감지되었습니다 — Page refresh detected ({refreshCount}회).{' '}
-                  이 기록은 제출 시 선생님께 전달됩니다.
+                  페이지 새로고침이 감지되었습니다 — Page refresh detected ({refreshCount}회). 이 기록은 제출 시 선생님께 전달됩니다.
                 </p>
               </div>
-              <button
-                onClick={() => setShowRefreshWarning(false)}
-                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
-              >
+              <button onClick={() => setShowRefreshWarning(false)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </section>
@@ -470,21 +455,12 @@ function FormContent() {
           {showTabWarning && (
             <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
               <div className="flex gap-4">
-                <span
-                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  warning
-                </span>
+                <span className="material-symbols-outlined text-red-500 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
                 <p className="text-sm text-red-700 font-medium">
-                  화면 이탈이 감지되었습니다 — Tab switch detected ({tabSwitchCount}회).{' '}
-                  이 기록은 제출 시 선생님께 전달됩니다.
+                  화면 이탈이 감지되었습니다 — Tab switch detected ({tabSwitchCount}회). 이 기록은 제출 시 선생님께 전달됩니다.
                 </p>
               </div>
-              <button
-                onClick={() => setShowTabWarning(false)}
-                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
-              >
+              <button onClick={() => setShowTabWarning(false)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </section>
@@ -494,69 +470,42 @@ function FormContent() {
           {showWindowBlurWarning && (
             <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
               <div className="flex gap-4">
-                <span
-                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  desktop_windows
-                </span>
+                <span className="material-symbols-outlined text-red-500 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>desktop_windows</span>
                 <p className="text-sm text-red-700 font-medium">
-                  다른 앱 또는 가상 데스크탑 전환이 감지되었습니다 — App / virtual desktop switch detected ({windowBlurCount}회).{' '}
-                  이 기록은 제출 시 선생님께 전달됩니다.
+                  다른 앱 또는 가상 데스크탑 전환이 감지되었습니다 — App / virtual desktop switch detected ({windowBlurCount}회). 이 기록은 제출 시 선생님께 전달됩니다.
                 </p>
               </div>
-              <button
-                onClick={() => setShowWindowBlurWarning(false)}
-                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
-              >
+              <button onClick={() => setShowWindowBlurWarning(false)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </section>
           )}
 
-          {/* Spotlight / search shortcut warning */}
+          {/* Spotlight warning */}
           {showSpotlightWarning && (
             <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
               <div className="flex gap-4">
-                <span
-                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  search
-                </span>
+                <span className="material-symbols-outlined text-red-500 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>search</span>
                 <p className="text-sm text-red-700 font-medium">
-                  Spotlight 검색 단축키가 감지되었습니다 — Spotlight / search shortcut detected ({spotlightCount}회).{' '}
-                  이 기록은 제출 시 선생님께 전달됩니다.
+                  Spotlight 검색 단축키가 감지되었습니다 — Spotlight / search shortcut detected ({spotlightCount}회). 이 기록은 제출 시 선생님께 전달됩니다.
                 </p>
               </div>
-              <button
-                onClick={() => setShowSpotlightWarning(false)}
-                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
-              >
+              <button onClick={() => setShowSpotlightWarning(false)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </section>
           )}
 
-          {/* Copy/cut warning */}
+          {/* Copy warning */}
           {showCopyWarning && (
             <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
               <div className="flex gap-4">
-                <span
-                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  content_copy
-                </span>
+                <span className="material-symbols-outlined text-red-500 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>content_copy</span>
                 <p className="text-sm text-red-700 font-medium">
-                  복사가 감지되었습니다 — Copy / Select-all detected ({copyCount}회).{' '}
-                  이 기록은 제출 시 선생님께 전달됩니다.
+                  복사가 감지되었습니다 — Copy / Select-all detected ({copyCount}회). 이 기록은 제출 시 선생님께 전달됩니다.
                 </p>
               </div>
-              <button
-                onClick={() => setShowCopyWarning(false)}
-                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
-              >
+              <button onClick={() => setShowCopyWarning(false)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </section>
@@ -566,21 +515,12 @@ function FormContent() {
           {showPasteWarning && (
             <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
               <div className="flex gap-4">
-                <span
-                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  content_paste_off
-                </span>
+                <span className="material-symbols-outlined text-red-500 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>content_paste_off</span>
                 <p className="text-sm text-red-700 font-medium">
-                  붙여넣기가 차단되었습니다 — Paste blocked ({pasteCount}회).{' '}
-                  이 기록은 제출 시 선생님께 전달됩니다.
+                  붙여넣기가 차단되었습니다 — Paste blocked ({pasteCount}회). 이 기록은 제출 시 선생님께 전달됩니다.
                 </p>
               </div>
-              <button
-                onClick={() => setShowPasteWarning(false)}
-                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
-              >
+              <button onClick={() => setShowPasteWarning(false)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </section>
@@ -590,16 +530,13 @@ function FormContent() {
           <div className="bg-white border border-slate-200 rounded-xl px-8 py-6 shadow-sm">
             <h1 className="text-2xl font-semibold text-on-surface">{title}</h1>
             <p className="text-sm text-on-surface-variant mt-1">
-              {name} · {studentNumber}
+              {student?.name} · {student?.studentNumber}
             </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             {questions.map((q, i) => (
-              <article
-                key={q.id}
-                className="bg-white border border-slate-200 rounded-xl p-8 shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
-              >
+              <article key={q.id} className="bg-white border border-slate-200 rounded-xl p-8 shadow-[0_4px_12px_rgba(0,0,0,0.05)]">
                 <header className="flex items-center gap-3 mb-6">
                   <span className="w-10 h-10 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-sm shrink-0">
                     {i + 1}
@@ -636,16 +573,10 @@ function FormContent() {
                     />
                     <div className="flex justify-end gap-4 mt-3 px-2">
                       <span className="text-xs text-slate-400">
-                        <strong className="text-slate-600">
-                          {countWords(answers[q.id] ?? '')}
-                        </strong>{' '}
-                        words
+                        <strong className="text-slate-600">{countWords(answers[q.id] ?? '')}</strong> words
                       </span>
                       <span className="text-xs text-slate-400">
-                        <strong className="text-slate-600">
-                          {(answers[q.id] ?? '').length}
-                        </strong>{' '}
-                        chars
+                        <strong className="text-slate-600">{(answers[q.id] ?? '').length}</strong> chars
                       </span>
                     </div>
                   </div>
@@ -655,9 +586,7 @@ function FormContent() {
 
             {error && (
               <div className="flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4">
-                <span className="material-symbols-outlined text-red-500 text-[20px] shrink-0">
-                  error
-                </span>
+                <span className="material-symbols-outlined text-red-500 text-[20px] shrink-0">error</span>
                 <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
@@ -690,13 +619,11 @@ function FormContent() {
 
 export default function FormPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
-      }
-    >
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    }>
       <FormContent />
     </Suspense>
   )
