@@ -43,12 +43,22 @@ function FormContent() {
   const [timeLeft, setTimeLeft] = useState(0)
   const [timerStarted, setTimerStarted] = useState(false)
   const [timedOut, setTimedOut] = useState(false)
+
+  // Security event states
   const [tabSwitchCount, setTabSwitchCount] = useState(0)
   const [showTabWarning, setShowTabWarning] = useState(false)
   const [copyCount, setCopyCount] = useState(0)
   const [showCopyWarning, setShowCopyWarning] = useState(false)
   const [pasteCount, setPasteCount] = useState(0)
   const [showPasteWarning, setShowPasteWarning] = useState(false)
+  const [refreshCount, setRefreshCount] = useState(0)
+  const [showRefreshWarning, setShowRefreshWarning] = useState(false)
+  const [windowBlurCount, setWindowBlurCount] = useState(0)
+  const [showWindowBlurWarning, setShowWindowBlurWarning] = useState(false)
+  const [spotlightCount, setSpotlightCount] = useState(0)
+  const [showSpotlightWarning, setShowSpotlightWarning] = useState(false)
+  const [duplicateSession, setDuplicateSession] = useState(false)
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const answersRef = useRef<Record<string, string>>({})
   const questionsRef = useRef<Question[]>([])
@@ -56,28 +66,96 @@ function FormContent() {
   const tabSwitchRef = useRef(0)
   const copyRef = useRef(0)
   const pasteRef = useRef(0)
+  const refreshRef = useRef(0)
+  const windowBlurRef = useRef(0)
+  const spotlightRef = useRef(0)
+  const duplicateSessionRef = useRef(false)
+  const sessionTokenRef = useRef('')
 
   useEffect(() => { answersRef.current = answers }, [answers])
   useEffect(() => { questionsRef.current = questions }, [questions])
+  useEffect(() => { duplicateSessionRef.current = duplicateSession }, [duplicateSession])
 
+  // Detect page refresh via PerformanceNavigationTiming and persist count in sessionStorage
   useEffect(() => {
-    function handleSwitch() {
-      if (submittingRef.current) return
-      tabSwitchRef.current += 1
-      setTabSwitchCount(tabSwitchRef.current)
-      setShowTabWarning(true)
-    }
-    document.addEventListener('visibilitychange', handleSwitch)
-    window.addEventListener('blur', handleSwitch)
-    return () => {
-      document.removeEventListener('visibilitychange', handleSwitch)
-      window.removeEventListener('blur', handleSwitch)
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    if (nav?.type === 'reload') {
+      const prev = parseInt(sessionStorage.getItem('sf_refresh') ?? '0', 10)
+      const count = prev + 1
+      sessionStorage.setItem('sf_refresh', String(count))
+      refreshRef.current = count
+      setRefreshCount(count)
+      setShowRefreshWarning(true)
     }
   }, [])
 
+  // Session registration — detects duplicate logins from another device/browser
   useEffect(() => {
-    // DOM copy/cut events fire for Ctrl+C, Cmd+C, right-click Copy, and Edit menu Copy.
-    // Using these instead of keydown avoids double-counting and catches right-click too.
+    if (!studentNumber) return
+    const token =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+    sessionTokenRef.current = token
+
+    fetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ studentNumber, sessionToken: token }),
+    })
+      .then((r) => r.json())
+      .then((data: { ok: boolean; duplicate: boolean }) => {
+        if (data.duplicate) setDuplicateSession(true)
+      })
+      .catch(() => {})
+
+    // Deregister on tab close / navigation away (keepalive ensures it completes)
+    const handleBeforeUnload = () => {
+      fetch('/api/session', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentNumber, sessionToken: token }),
+        keepalive: true,
+      }).catch(() => {})
+    }
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [studentNumber])
+
+  // Tab switching — fires when the browser tab/page becomes hidden
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (submittingRef.current) return
+      if (document.hidden) {
+        tabSwitchRef.current += 1
+        setTabSwitchCount(tabSwitchRef.current)
+        setShowTabWarning(true)
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [])
+
+  // App / virtual desktop switching — fires when window loses focus but tab stays visible.
+  // Uses a 150 ms delay so that a tab-switch (which also triggers blur before visibilitychange)
+  // is not double-counted: by 150 ms, document.hidden will already be true for tab switches.
+  useEffect(() => {
+    function handleWindowBlur() {
+      if (submittingRef.current) return
+      setTimeout(() => {
+        if (!document.hidden) {
+          windowBlurRef.current += 1
+          setWindowBlurCount(windowBlurRef.current)
+          setShowWindowBlurWarning(true)
+        }
+      }, 150)
+    }
+    window.addEventListener('blur', handleWindowBlur)
+    return () => window.removeEventListener('blur', handleWindowBlur)
+  }, [])
+
+  // Copy / paste / select-all / Spotlight shortcut detection
+  useEffect(() => {
     function handleCopy() {
       if (submittingRef.current) return
       copyRef.current += 1
@@ -91,24 +169,30 @@ function FormContent() {
       setPasteCount(pasteRef.current)
       setShowPasteWarning(true)
     }
-    // Ctrl+A / Cmd+A (select all) has no DOM event — keydown only.
-    function handleSelectAll(e: KeyboardEvent) {
+    function handleKeyDown(e: KeyboardEvent) {
       if (submittingRef.current) return
+      // Ctrl+A / Cmd+A — select-all counted as copy attempt
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
         copyRef.current += 1
         setCopyCount(copyRef.current)
         setShowCopyWarning(true)
       }
+      // macOS Spotlight: Cmd+Space (browser may receive this before the OS captures it)
+      if (e.metaKey && e.key === ' ') {
+        spotlightRef.current += 1
+        setSpotlightCount(spotlightRef.current)
+        setShowSpotlightWarning(true)
+      }
     }
     document.addEventListener('copy', handleCopy)
     document.addEventListener('cut', handleCopy)
     document.addEventListener('paste', handlePaste)
-    document.addEventListener('keydown', handleSelectAll)
+    document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('copy', handleCopy)
       document.removeEventListener('cut', handleCopy)
       document.removeEventListener('paste', handlePaste)
-      document.removeEventListener('keydown', handleSelectAll)
+      document.removeEventListener('keydown', handleKeyDown)
     }
   }, [])
 
@@ -151,11 +235,23 @@ function FormContent() {
         tabSwitchCount: tabSwitchRef.current,
         copyCount: copyRef.current,
         pasteCount: pasteRef.current,
+        refreshCount: refreshRef.current,
+        windowBlurCount: windowBlurRef.current,
+        spotlightCount: spotlightRef.current,
+        duplicateSession: duplicateSessionRef.current,
       }),
     })
 
     setSubmitting(false)
     if (res.ok) {
+      sessionStorage.removeItem('sf_refresh')
+      if (sessionTokenRef.current) {
+        fetch('/api/session', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ studentNumber, sessionToken: sessionTokenRef.current }),
+        }).catch(() => {})
+      }
       if (isAutoSubmit) setTimedOut(true)
       setSubmitted(true)
     } else {
@@ -163,7 +259,7 @@ function FormContent() {
       const data = await res.json().catch(() => ({}))
       setError(data.error ?? 'Submission failed. Please try again.')
     }
-  }, [name, studentNumber])
+  }, [name, studentNumber, email])
 
   useEffect(() => {
     if (!timerStarted || timeLimitSecs === 0) return
@@ -304,7 +400,29 @@ function FormContent() {
       <main className="pt-16 pb-10 px-4 md:px-12 lg:px-24">
         <div className="max-w-[720px] mx-auto space-y-6 py-8">
 
-          {/* Security warning */}
+          {/* Duplicate session warning — permanent, cannot be dismissed */}
+          {duplicateSession && (
+            <section className="bg-red-900 border border-red-700 rounded-xl p-5 flex gap-4 shadow-sm">
+              <span
+                className="material-symbols-outlined text-red-300 mt-0.5 shrink-0"
+                style={{ fontVariationSettings: "'FILL' 1" }}
+              >
+                person_alert
+              </span>
+              <div>
+                <h4 className="font-bold text-red-100 text-sm">
+                  Duplicate Login Detected / 중복 접속 감지
+                </h4>
+                <p className="text-red-200/80 text-sm mt-1 leading-relaxed">
+                  Your student number is already active in another session. This has been flagged and will be reported to your instructor.
+                  <br />
+                  동일한 학번으로 다른 기기 또는 브라우저에서 이미 접속 중입니다. 이 사실은 부정행위 기록으로 선생님께 전달됩니다.
+                </p>
+              </div>
+            </section>
+          )}
+
+          {/* Security warning banner */}
           <section className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex gap-4 shadow-sm">
             <span
               className="material-symbols-outlined text-amber-600 mt-0.5 shrink-0"
@@ -317,14 +435,36 @@ function FormContent() {
                 Security Warning: Anti-Cheat Protocol
               </h4>
               <p className="text-amber-800/80 text-sm mt-1 leading-relaxed">
-                Copy-pasting and tab-switching are strictly prohibited. These actions are logged
-                and will trigger an automatic security review of your submission.
+                The following actions are monitored and reported to your instructor: copying text, switching browser tabs or windows, switching to another virtual desktop (Mission Control / Windows virtual desktops), activating Spotlight or search tools (⌘Space), refreshing the page, and logging in from multiple devices at the same time.
                 <br />
-                클립보드를 이용한 붙여넣기 또는 다른 애플리케이션으로 이동하여 내용을 참고하는
-                것은 부정행위로 처리됩니다.
+                클립보드 사용, 탭/창 전환, 가상 데스크탑 전환(미션 컨트롤 / 윈도우 가상 데스크탑), Spotlight 검색(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속은 모두 기록되어 선생님께 전달됩니다.
               </p>
             </div>
           </section>
+
+          {/* Refresh warning */}
+          {showRefreshWarning && (
+            <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
+              <div className="flex gap-4">
+                <span
+                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  refresh
+                </span>
+                <p className="text-sm text-red-700 font-medium">
+                  페이지 새로고침이 감지되었습니다 — Page refresh detected ({refreshCount}회).{' '}
+                  이 기록은 제출 시 선생님께 전달됩니다.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowRefreshWarning(false)}
+                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </section>
+          )}
 
           {/* Tab switch warning */}
           {showTabWarning && (
@@ -337,12 +477,60 @@ function FormContent() {
                   warning
                 </span>
                 <p className="text-sm text-red-700 font-medium">
-                  화면 이탈이 감지되었습니다 — Window switch detected ({tabSwitchCount}회).{' '}
+                  화면 이탈이 감지되었습니다 — Tab switch detected ({tabSwitchCount}회).{' '}
                   이 기록은 제출 시 선생님께 전달됩니다.
                 </p>
               </div>
               <button
                 onClick={() => setShowTabWarning(false)}
+                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </section>
+          )}
+
+          {/* App / virtual desktop switch warning */}
+          {showWindowBlurWarning && (
+            <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
+              <div className="flex gap-4">
+                <span
+                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  desktop_windows
+                </span>
+                <p className="text-sm text-red-700 font-medium">
+                  다른 앱 또는 가상 데스크탑 전환이 감지되었습니다 — App / virtual desktop switch detected ({windowBlurCount}회).{' '}
+                  이 기록은 제출 시 선생님께 전달됩니다.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowWindowBlurWarning(false)}
+                className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </section>
+          )}
+
+          {/* Spotlight / search shortcut warning */}
+          {showSpotlightWarning && (
+            <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
+              <div className="flex gap-4">
+                <span
+                  className="material-symbols-outlined text-red-500 mt-0.5 shrink-0"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  search
+                </span>
+                <p className="text-sm text-red-700 font-medium">
+                  Spotlight 검색 단축키가 감지되었습니다 — Spotlight / search shortcut detected ({spotlightCount}회).{' '}
+                  이 기록은 제출 시 선생님께 전달됩니다.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSpotlightWarning(false)}
                 className="shrink-0 text-red-400 hover:text-red-600 transition-colors"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>

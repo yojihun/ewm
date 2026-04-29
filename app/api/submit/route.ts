@@ -5,7 +5,19 @@ import { sendSubmissionEmail } from '@/lib/email'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { name, studentNumber, email, answers, tabSwitchCount, copyCount, pasteCount } = body as {
+  const {
+    name,
+    studentNumber,
+    email,
+    answers,
+    tabSwitchCount,
+    copyCount,
+    pasteCount,
+    refreshCount,
+    windowBlurCount,
+    spotlightCount,
+    duplicateSession,
+  } = body as {
     name: string
     studentNumber: string
     email: string
@@ -13,6 +25,10 @@ export async function POST(req: NextRequest) {
     tabSwitchCount: number
     copyCount: number
     pasteCount: number
+    refreshCount: number
+    windowBlurCount: number
+    spotlightCount: number
+    duplicateSession: boolean
   }
 
   if (!name || !studentNumber) {
@@ -42,6 +58,10 @@ export async function POST(req: NextRequest) {
     String(tabSwitchCount ?? 0),
     String(copyCount ?? 0),
     String(pasteCount ?? 0),
+    String(refreshCount ?? 0),
+    String(windowBlurCount ?? 0),
+    String(spotlightCount ?? 0),
+    duplicateSession ? 'YES' : 'NO',
     ...answerValues,
   ]
 
@@ -62,6 +82,15 @@ export async function POST(req: NextRequest) {
         quizTitle: config.title,
         questions: config.questions,
         answers,
+        securityCounts: {
+          tabSwitchCount: tabSwitchCount ?? 0,
+          copyCount: copyCount ?? 0,
+          pasteCount: pasteCount ?? 0,
+          refreshCount: refreshCount ?? 0,
+          windowBlurCount: windowBlurCount ?? 0,
+          spotlightCount: spotlightCount ?? 0,
+          duplicateSession: duplicateSession ?? false,
+        },
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error'
