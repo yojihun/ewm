@@ -350,7 +350,7 @@ function FormContent() {
     <div className="min-h-screen bg-background">
       {/* Fixed Header */}
       <header className="bg-white border-b border-slate-200 shadow-sm fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-6">
-        <span className="text-xl font-black text-indigo-700 tracking-tighter">PME</span>
+        <span className="text-xl font-black text-indigo-700 tracking-tighter">EWM</span>
 
         {/* Progress – center */}
         {questions.length > 0 && (

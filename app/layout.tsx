@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Practical Media English",
-  description: "Assessment portal for Practical Media English — English for IT, SW, Design",
+  title: "English Writing in Mirim",
+  description: "Assessment portal for English Writing in Mirim",
 };
 
 export default function RootLayout({

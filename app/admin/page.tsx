@@ -23,7 +23,7 @@ function AdminLoginContent() {
     <div className="flex min-h-screen items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-md border border-slate-100">
         <div className="mb-6 text-center">
-          <span className="text-2xl font-black text-indigo-700 tracking-tighter">PME</span>
+          <span className="text-2xl font-black text-indigo-700 tracking-tighter">EWM</span>
           <h1 className="mt-3 text-xl font-bold text-gray-800">Teacher Login</h1>
           <p className="mt-1 text-sm text-gray-500">
             Sign in with your school Google account.
