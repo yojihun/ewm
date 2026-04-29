@@ -104,16 +104,23 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
 
   async function createTask() {
     setCreating(true)
-    const res = await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: 'New Task', timeLimit: 0, questions: [], createdBy: '' }),
-    })
-    if (res.status === 401) { router.replace('/admin'); return }
-    const task: Task = await res.json()
-    setTasks((prev) => [...prev, task])
-    selectTask(task)
-    setCreating(false)
+    try {
+      const res = await fetch('/api/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: 'New Task', timeLimit: 0, questions: [], createdBy: '' }),
+      })
+      if (res.status === 401) { router.replace('/admin'); return }
+      const data = await res.json()
+      if (!res.ok) { alert(`Failed to create task: ${data.error ?? res.status}`); return }
+      const task: Task = data
+      setTasks((prev) => [...prev, task])
+      selectTask(task)
+    } catch (err) {
+      alert(`Network error: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setCreating(false)
+    }
   }
 
   async function deleteTask(id: string) {
