@@ -9,6 +9,12 @@ const ALLOWED_EMAILS = (
   .split(',')
   .map((e) => e.trim().toLowerCase())
 
+const TEACHER_NAMES: Record<string, string> = {
+  'yojihun@e-mirim.hs.kr': '김지훈',
+  'yknym@e-mirim.hs.kr': '이윤경',
+  'seho0718@e-mirim.hs.kr': '이세호',
+}
+
 function debug(data: Record<string, unknown>) {
   return new Response(
     `<pre style="font-family:monospace;padding:2rem">${JSON.stringify(data, null, 2)}</pre>`,
@@ -78,7 +84,8 @@ export async function GET(req: NextRequest) {
     }
 
     const res = NextResponse.redirect(`${base}/admin/dashboard`)
-    res.cookies.set('sf_session', JSON.stringify({ name: data.name ?? email.split('@')[0], email }), {
+    const teacherName = TEACHER_NAMES[email] ?? data.name ?? email.split('@')[0]
+    res.cookies.set('sf_session', JSON.stringify({ name: teacherName, email }), {
       httpOnly: true,
       sameSite: 'lax',
       path: '/',
