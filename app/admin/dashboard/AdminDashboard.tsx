@@ -453,6 +453,8 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                 <div className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-3">
                   <p className="text-xs text-gray-400">질문 텍스트에 마크다운 문법을 사용할 수 있습니다.</p>
                   <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-2 text-xs items-center">
+                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700"># 텍스트</code>
+                    <span className="text-gray-500 font-bold">질문 제목</span>
                     <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">**텍스트**</code>
                     <span className="text-gray-500 font-semibold">굵게</span>
                     <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">*텍스트*</code>
