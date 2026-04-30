@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 
-function baseUrl() {
-  const raw =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-  return raw.replace(/\/+$/, '')
+function baseUrl(req: NextRequest) {
+  // Derive from the actual request URL so it works on any domain with no config
+  return new URL(req.url).origin
 }
 
 export async function GET(req: NextRequest) {
+  const base = baseUrl(req)
   const type = new URL(req.url).searchParams.get('type') === 'student' ? 'student' : 'teacher'
-  const errorRedirect = type === 'student' ? `${baseUrl()}/?error=oauth_not_configured` : `${baseUrl()}/admin?error=oauth_not_configured`
+  const errorRedirect = type === 'student' ? `${base}/?error=oauth_not_configured` : `${base}/admin?error=oauth_not_configured`
 
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     return NextResponse.redirect(errorRedirect)
@@ -21,7 +20,7 @@ export async function GET(req: NextRequest) {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    `${baseUrl()}/api/auth/google/callback`
+    `${base}/api/auth/google/callback`
   )
 
   const authUrl = oauth2Client.generateAuthUrl({

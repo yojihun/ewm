@@ -9,19 +9,12 @@ const ALLOWED_EMAILS = (
   .split(',')
   .map((e) => e.trim().toLowerCase())
 
-function baseUrl() {
-  const raw =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-  return raw.replace(/\/+$/, '')
-}
-
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
+  const { searchParams, origin } = new URL(req.url)
+  const base = origin
   const code = searchParams.get('code')
   const state = searchParams.get('state')
   const oauthError = searchParams.get('error')
-  const base = baseUrl()
 
   const storedState = req.cookies.get('sf_oauth_state')?.value
 
