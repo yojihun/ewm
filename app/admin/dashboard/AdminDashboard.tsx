@@ -272,7 +272,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                   {task.title}
                 </p>
                 <p className="text-[10px] text-gray-400 mt-0.5">
-                  {task.questions.length} question{task.questions.length !== 1 ? 's' : ''}
+                  {(task.questions ?? []).length} question{(task.questions ?? []).length !== 1 ? 's' : ''}
                   {task.createdBy ? ` · ${task.createdBy}` : ''}
                 </p>
                 <button

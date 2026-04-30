@@ -59,7 +59,8 @@ export async function readAllTasks(): Promise<Task[]> {
     if (!json) return []
 
     const parsed = JSON.parse(json)
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((t: Task) => ({ ...t, questions: t.questions ?? [] }))
   } catch {
     return []
   }
