@@ -52,7 +52,11 @@ export async function GET(req: NextRequest) {
     const email = (data.email ?? '').toLowerCase()
 
     if (authType === 'student') {
-      const student = findStudentByEmail(email)
+      let student = findStudentByEmail(email)
+      if (!student && ALLOWED_EMAILS.includes(email)) {
+        // Teachers can log in as students for testing
+        student = { studentNumber: 'teacher', name: email.split('@')[0], email }
+      }
       if (!student) {
         return debug({ step: 'student_not_found', email, base })
       }
