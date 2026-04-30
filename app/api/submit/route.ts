@@ -60,6 +60,12 @@ export async function POST(req: NextRequest) {
 
   const answerValues = task.questions.map((q) => answers[q.id] ?? '')
 
+  const header = [
+    '제출 시각', '이름', '학번', '이메일',
+    '탭 전환', '복사', '붙여넣기', '새로고침', '창 전환', '스포트라이트', '중복 세션',
+    ...task.questions.map((q, i) => `Q${i + 1}. ${q.text.replace(/[*`#>_~]/g, '').slice(0, 60)}`),
+  ]
+
   const row = [
     new Date().toISOString(),
     name,
@@ -76,7 +82,7 @@ export async function POST(req: NextRequest) {
   ]
 
   try {
-    await appendRow(task.title, row)
+    await appendRow(task.title, header, row)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     console.error('[submit] Google Sheets error:', message)

@@ -14,7 +14,7 @@ async function ensureSheet(
   sheets: ReturnType<typeof google.sheets>,
   spreadsheetId: string,
   tabTitle: string
-): Promise<void> {
+): Promise<boolean> {
   const meta = await sheets.spreadsheets.get({ spreadsheetId })
   const exists = meta.data.sheets?.some(
     (s) => s.properties?.title === tabTitle
@@ -26,22 +26,26 @@ async function ensureSheet(
         requests: [{ addSheet: { properties: { title: tabTitle } } }],
       },
     })
+    return true
   }
+  return false
 }
 
-export async function appendRow(tabTitle: string, values: string[]): Promise<void> {
+export async function appendRow(tabTitle: string, header: string[], values: string[]): Promise<void> {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID
   if (!spreadsheetId) throw new Error('GOOGLE_SHEET_ID is not set')
 
   const auth = getAuth()
   const sheets = google.sheets({ version: 'v4', auth })
 
-  await ensureSheet(sheets, spreadsheetId, tabTitle)
+  const isNew = await ensureSheet(sheets, spreadsheetId, tabTitle)
+
+  const rows = isNew ? [header, values] : [values]
 
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `'${tabTitle}'`,
     valueInputOption: 'RAW',
-    requestBody: { values: [values] },
+    requestBody: { values: rows },
   })
 }
