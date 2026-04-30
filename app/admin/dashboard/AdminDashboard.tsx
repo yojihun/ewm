@@ -96,23 +96,12 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
 
   function selectTask(task: Task) {
     setSelectedId(task.id)
-  }
-
-  // Sync editor fields whenever selected task changes
-  useEffect(() => {
-    if (!selectedId) {
-      setTitle(''); setTimeLimit(0); setQuestions([]); setEditingId(null); setNewText('')
-      return
-    }
-    const task = tasks.find((t) => t.id === selectedId)
-    if (!task) return
     setTitle(task.title)
     setTimeLimit(task.timeLimit ?? 0)
     setQuestions(task.questions ?? [])
     setEditingId(null)
     setNewText('')
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId])
+  }
 
   async function createTask() {
     setCreating(true)
@@ -143,7 +132,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
     setTasks(remaining)
     if (selectedId === id) {
       if (remaining.length > 0) selectTask(remaining[0])
-      else setSelectedId(null)
+      else { setSelectedId(null); setTitle(''); setTimeLimit(0); setQuestions([]); setEditingId(null); setNewText('') }
     }
   }
 
@@ -342,15 +331,23 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                 <label className="text-sm font-semibold text-gray-700">Task Title</label>
                 <SavedBadge show={titleSaved} />
               </div>
-              <input
-                type="text"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                onBlur={saveTitle}
-                placeholder="e.g. Chapter 3 Writing"
-                className="w-full rounded-lg border border-gray-300 p-3 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-              />
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
+                  onBlur={saveTitle}
+                  placeholder="e.g. Chapter 3 Writing"
+                  className="flex-1 rounded-lg border border-gray-300 p-3 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                />
+                <button
+                  onClick={saveTitle}
+                  className="rounded-lg bg-gray-800 px-5 py-2 text-sm font-semibold text-white hover:bg-gray-900"
+                >
+                  저장
+                </button>
+              </div>
             </div>
 
             {/* Time limit */}
@@ -379,8 +376,14 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                   />
                   <span className="text-sm text-gray-400">min</span>
                 </div>
+                <button
+                  onClick={saveTimeLimit}
+                  className="rounded-lg bg-gray-800 px-5 py-2 text-sm font-semibold text-white hover:bg-gray-900"
+                >
+                  저장
+                </button>
                 {timeLimit > 0 && (
-                  <span className="text-sm text-gray-500">Timer starts on student's first keystroke</span>
+                  <span className="text-sm text-gray-500">학생이 첫 입력 시 타이머 시작</span>
                 )}
               </div>
               <p className="mt-2 text-xs text-gray-400">Set to 0 to disable. Max 180 minutes.</p>
@@ -509,7 +512,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                   <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
-                  <span className="text-sm font-semibold text-gray-600">Markdown Tips</span>
+                  <span className="text-sm font-semibold text-gray-600">마크다운 도움말</span>
                 </div>
                 <svg className={`h-4 w-4 text-gray-400 transition-transform duration-200 ${tipsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
@@ -517,24 +520,24 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
               </button>
               {tipsOpen && (
                 <div className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-3">
-                  <p className="text-xs text-gray-400">Question text supports Markdown. Use these in your questions:</p>
+                  <p className="text-xs text-gray-400">질문 텍스트에 마크다운 문법을 사용할 수 있습니다.</p>
                   <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-3 gap-y-2 text-xs items-center">
-                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">**bold**</code>
-                    <span className="text-gray-500 font-semibold">bold</span>
-                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">*italic*</code>
-                    <span className="text-gray-500 italic">italic</span>
+                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">**텍스트**</code>
+                    <span className="text-gray-500 font-semibold">굵게</span>
+                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">*텍스트*</code>
+                    <span className="text-gray-500 italic">기울임</span>
 
-                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">- item</code>
-                    <span className="text-gray-500">bullet list</span>
-                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">1. item</code>
-                    <span className="text-gray-500">numbered list</span>
+                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">- 항목</code>
+                    <span className="text-gray-500">글머리 기호 목록</span>
+                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">1. 항목</code>
+                    <span className="text-gray-500">번호 목록</span>
 
-                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">`code`</code>
-                    <span className="text-gray-500 font-mono text-[11px]">inline code</span>
-                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">&gt; text</code>
-                    <span className="text-gray-500">blockquote</span>
+                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">`코드`</code>
+                    <span className="text-gray-500 font-mono text-[11px]">인라인 코드</span>
+                    <code className="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-gray-700">&gt; 텍스트</code>
+                    <span className="text-gray-500">인용구</span>
                   </div>
-                  <p className="text-xs text-gray-400 pt-1">Leave a blank line between paragraphs. Use Enter twice to start a new paragraph.</p>
+                  <p className="text-xs text-gray-400 pt-1">문단 사이에는 빈 줄을 넣으세요. Enter를 두 번 눌러 새 문단을 시작합니다.</p>
                 </div>
               )}
             </div>
