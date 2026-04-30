@@ -9,6 +9,13 @@ const ALLOWED_EMAILS = (
   .split(',')
   .map((e) => e.trim().toLowerCase())
 
+function debug(data: Record<string, unknown>) {
+  return new Response(
+    `<pre style="font-family:monospace;padding:2rem">${JSON.stringify(data, null, 2)}</pre>`,
+    { status: 200, headers: { 'content-type': 'text/html' } }
+  )
+}
+
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url)
   const base = origin
@@ -23,11 +30,11 @@ export async function GET(req: NextRequest) {
   const errorBase = authType === 'student' ? `${base}/` : `${base}/admin`
 
   if (oauthError || !code) {
-    return NextResponse.redirect(`${errorBase}?error=oauth_cancelled`)
+    return debug({ step: 'early_exit', oauthError, hasCode: !!code, base })
   }
 
   if (!storedState || storedState !== state) {
-    return NextResponse.redirect(`${errorBase}?error=invalid_state`)
+    return debug({ step: 'state_mismatch', storedState: storedState ?? null, state, base })
   }
 
   try {
@@ -47,9 +54,7 @@ export async function GET(req: NextRequest) {
     if (authType === 'student') {
       const student = findStudentByEmail(email)
       if (!student) {
-        return NextResponse.redirect(
-          `${base}/?error=not_allowed&email=${encodeURIComponent(email)}`
-        )
+        return debug({ step: 'student_not_found', email, base })
       }
 
       const res = NextResponse.redirect(`${base}/`)
@@ -65,9 +70,7 @@ export async function GET(req: NextRequest) {
 
     // Teacher flow
     if (!ALLOWED_EMAILS.includes(email)) {
-      return NextResponse.redirect(
-        `${base}/admin?error=not_allowed&email=${encodeURIComponent(email)}`
-      )
+      return debug({ step: 'teacher_not_allowed', email, allowedEmails: ALLOWED_EMAILS, base })
     }
 
     const res = NextResponse.redirect(`${base}/admin/dashboard`)
@@ -80,7 +83,7 @@ export async function GET(req: NextRequest) {
     res.cookies.delete('sf_oauth_state')
     return res
   } catch (err) {
-    console.error('[google/callback]', err)
-    return NextResponse.redirect(`${errorBase}?error=auth_failed`)
+    const message = err instanceof Error ? err.message : String(err)
+    return debug({ step: 'exception', error: message, base })
   }
 }
