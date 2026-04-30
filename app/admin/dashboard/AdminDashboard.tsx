@@ -167,7 +167,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
   const selectedTask = tasks.find((t) => t.id === selectedId)
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar */}
       <aside className="w-64 shrink-0 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
@@ -250,7 +250,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
       </aside>
 
       {/* Main editor */}
-      <main className="flex-1 overflow-y-auto p-6 py-8">
+      <main className="flex-1 overflow-y-auto p-6 py-8 min-w-0">
         {!selectedTask ? (
           <div className="flex h-full items-center justify-center">
             <p className="text-gray-400 text-sm">사이드바에서 과제를 선택하거나 새 과제를 만드세요.</p>
@@ -478,6 +478,72 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
           </div>
         )}
       </main>
+
+      {/* Student preview panel — visible only on xl+ screens */}
+      <aside className="hidden xl:flex flex-col w-80 shrink-0 border-l border-gray-200 bg-white overflow-y-auto">
+        <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-5 py-3 flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full bg-green-400" />
+          <span className="text-xs font-semibold text-gray-500 uppercase tracking-widest">학생 화면 미리보기</span>
+        </div>
+
+        {!selectedId ? (
+          <div className="flex flex-1 items-center justify-center p-6">
+            <p className="text-xs text-gray-300 text-center">과제를 선택하면<br />미리보기가 표시됩니다</p>
+          </div>
+        ) : (
+          <div className="p-5 space-y-5">
+            {/* Task header */}
+            <div>
+              <h2 className="text-base font-bold text-gray-900 leading-snug">
+                {title || <span className="text-gray-300">제목 없음</span>}
+              </h2>
+              {timeLimit > 0 && (
+                <span className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  제한 시간 {timeLimit}분
+                </span>
+              )}
+            </div>
+
+            {/* Questions */}
+            {questions.length === 0 ? (
+              <p className="text-xs text-gray-300">질문이 없습니다</p>
+            ) : (
+              <div className="space-y-4">
+                {questions.map((q, i) => (
+                  <div key={q.id} className="space-y-1.5">
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">
+                        {i + 1}
+                      </span>
+                      <div className="markdown text-sm text-gray-800 leading-relaxed">
+                        <ReactMarkdown>{q.text}</ReactMarkdown>
+                      </div>
+                    </div>
+                    {q.type === 'textarea' ? (
+                      <textarea
+                        disabled
+                        rows={3}
+                        placeholder="학생 답변 입력란"
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-400 placeholder:text-gray-300 resize-none cursor-default"
+                      />
+                    ) : (
+                      <input
+                        disabled
+                        type="text"
+                        placeholder="학생 답변 입력란"
+                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-2.5 text-xs text-gray-400 placeholder:text-gray-300 cursor-default"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </aside>
     </div>
   )
 }
