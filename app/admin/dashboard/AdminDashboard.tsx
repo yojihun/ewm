@@ -41,6 +41,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [teacherName, setTeacherName] = useState('')
   const [saving, setSaving] = useState(false)
   const [allSaved, setAllSaved] = useState(false)
   const [tipsOpen, setTipsOpen] = useState(false)
@@ -59,6 +60,8 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
   async function loadTasks() {
     const auth = await fetch('/api/auth/check')
     if (!auth.ok) { router.replace('/admin'); return }
+    const { name } = await auth.json()
+    if (name) setTeacherName(name)
     const res = await fetch('/api/tasks')
     const data: Task[] = await res.json()
     setTasks(data)
@@ -106,7 +109,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: '새 과제', timeLimit: 0, questions: [], createdBy: '' }),
+        body: JSON.stringify({ title: '새 과제', timeLimit: 0, questions: [], createdBy: teacherName }),
       })
       if (res.status === 401) { router.replace('/admin'); return }
       const data = await res.json()

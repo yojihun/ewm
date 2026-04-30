@@ -78,7 +78,7 @@ export async function GET(req: NextRequest) {
     }
 
     const res = NextResponse.redirect(`${base}/admin/dashboard`)
-    res.cookies.set('sf_session', 'admin_authenticated', {
+    res.cookies.set('sf_session', JSON.stringify({ name: data.name ?? email.split('@')[0], email }), {
       httpOnly: true,
       sameSite: 'lax',
       path: '/',

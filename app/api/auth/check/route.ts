@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getTeacherInfo } from '@/lib/auth'
 
 export async function GET() {
-  const ok = await getSession()
-  if (!ok) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  return NextResponse.json({ ok: true })
+  const teacher = await getTeacherInfo()
+  if (!teacher) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  return NextResponse.json({ ok: true, name: teacher.name })
 }
