@@ -22,26 +22,15 @@ interface Task {
 function Preview({ text }: { text: string }) {
   return (
     <div className="mt-3 border-t border-gray-100 pt-3">
-      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">Preview</p>
+      <p className="mb-1.5 text-[10px] font-bold uppercase tracking-widest text-gray-400">미리보기</p>
       {text.trim() ? (
         <div className="markdown text-sm text-gray-800 leading-relaxed">
           <ReactMarkdown>{text}</ReactMarkdown>
         </div>
       ) : (
-        <p className="text-xs text-gray-300 italic">Nothing to preview yet…</p>
+        <p className="text-xs text-gray-300 italic">입력하면 미리보기가 표시됩니다.</p>
       )}
     </div>
-  )
-}
-
-function SavedBadge({ show }: { show: boolean }) {
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700 transition-all duration-300 ${show ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1 pointer-events-none'}`}>
-      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-      </svg>
-      Saved
-    </span>
   )
 }
 
@@ -52,8 +41,12 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [allSaved, setAllSaved] = useState(false)
+  const [tipsOpen, setTipsOpen] = useState(false)
+  const allSavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Per-task editor state
+  // Per-task editor state (local until Save is clicked)
   const [title, setTitle] = useState('')
   const [timeLimit, setTimeLimit] = useState(0)
   const [questions, setQuestions] = useState<Question[]>([])
@@ -63,22 +56,6 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
   const [editText, setEditText] = useState('')
   const [editType, setEditType] = useState<'text' | 'textarea'>('textarea')
 
-  // Flash badges
-  const [titleSaved, setTitleSaved] = useState(false)
-  const [timeLimitSaved, setTimeLimitSaved] = useState(false)
-  const [savedQuestionId, setSavedQuestionId] = useState<string | null>(null)
-  const [addedFlash, setAddedFlash] = useState(false)
-  const [tipsOpen, setTipsOpen] = useState(false)
-  const titleTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const timeLimitTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const questionTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  function flash(setter: (v: boolean) => void, timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>) {
-    setter(true)
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => setter(false), 2000)
-  }
-
   async function loadTasks() {
     const auth = await fetch('/api/auth/check')
     if (!auth.ok) { router.replace('/admin'); return }
@@ -86,10 +63,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
     const data: Task[] = await res.json()
     setTasks(data)
     setLoading(false)
-    // Auto-select first task
-    if (data.length > 0 && !selectedId) {
-      selectTask(data[0])
-    }
+    if (data.length > 0 && !selectedId) selectTask(data[0])
   }
 
   useEffect(() => { loadTasks() }, [])
@@ -101,6 +75,29 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
     setQuestions(task.questions ?? [])
     setEditingId(null)
     setNewText('')
+    setAllSaved(false)
+  }
+
+  async function saveAll() {
+    if (!selectedId || saving) return
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/tasks/${selectedId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, timeLimit, questions }),
+      })
+      if (res.status === 401) { router.replace('/admin'); return }
+      const updated: Task = await res.json()
+      setTasks((prev) => prev.map((t) => (t.id === selectedId ? updated : t)))
+      setAllSaved(true)
+      if (allSavedTimer.current) clearTimeout(allSavedTimer.current)
+      allSavedTimer.current = setTimeout(() => setAllSaved(false), 2500)
+    } catch (err) {
+      alert(`저장 실패: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function createTask() {
@@ -109,23 +106,23 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: 'New Task', timeLimit: 0, questions: [], createdBy: '' }),
+        body: JSON.stringify({ title: '새 과제', timeLimit: 0, questions: [], createdBy: '' }),
       })
       if (res.status === 401) { router.replace('/admin'); return }
       const data = await res.json()
-      if (!res.ok) { alert(`Failed to create task: ${data.error ?? res.status}`); return }
+      if (!res.ok) { alert(`과제 생성 실패: ${data.error ?? res.status}`); return }
       const task: Task = data
       setTasks((prev) => [...prev, task])
       selectTask(task)
     } catch (err) {
-      alert(`Network error: ${err instanceof Error ? err.message : String(err)}`)
+      alert(`네트워크 오류: ${err instanceof Error ? err.message : String(err)}`)
     } finally {
       setCreating(false)
     }
   }
 
   async function deleteTask(id: string) {
-    if (!confirm('Delete this task and all its questions?')) return
+    if (!confirm('이 과제와 모든 질문을 삭제하시겠습니까?')) return
     const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
     if (res.status === 401) { router.replace('/admin'); return }
     const remaining = tasks.filter((t) => t.id !== id)
@@ -136,77 +133,22 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
     }
   }
 
-  // Save title for selected task
-  async function saveTitle() {
-    if (!selectedId) return
-    const res = await fetch(`/api/tasks/${selectedId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
-    })
-    if (res.status === 401) { router.replace('/admin'); return }
-    const updated: Task = await res.json()
-    setTasks((prev) => prev.map((t) => (t.id === selectedId ? updated : t)))
-    flash(setTitleSaved, titleTimer)
-  }
-
-  async function saveTimeLimit() {
-    if (!selectedId) return
-    const res = await fetch(`/api/tasks/${selectedId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ timeLimit }),
-    })
-    if (res.status === 401) { router.replace('/admin'); return }
-    flash(setTimeLimitSaved, timeLimitTimer)
-  }
-
-  // Save full questions array for selected task
-  async function saveQuestions(qs: Question[]) {
-    if (!selectedId) return
-    const res = await fetch(`/api/tasks/${selectedId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ questions: qs }),
-    })
-    if (res.status === 401) { router.replace('/admin'); return }
-    const updated: Task = await res.json()
-    setTasks((prev) => prev.map((t) => (t.id === selectedId ? updated : t)))
-    return updated
-  }
-
-  async function addQuestion() {
-    if (!newText.trim() || !selectedId) return
-    const newQ: Question = {
-      id: Date.now().toString(),
-      text: newText.trim(),
-      type: newType,
-    }
-    const updated = [...questions, newQ]
-    setQuestions(updated)
+  function addQuestion() {
+    if (!newText.trim()) return
+    const newQ: Question = { id: Date.now().toString(), text: newText.trim(), type: newType }
+    setQuestions((prev) => [...prev, newQ])
     setNewText('')
-    setAddedFlash(true)
-    setTimeout(() => setAddedFlash(false), 2000)
-    await saveQuestions(updated)
   }
 
-  async function saveEdit(id: string) {
-    const updated = questions.map((q) =>
-      q.id === id ? { ...q, text: editText.trim(), type: editType } : q
+  function applyEdit(id: string) {
+    setQuestions((prev) =>
+      prev.map((q) => (q.id === id ? { ...q, text: editText.trim(), type: editType } : q))
     )
-    setQuestions(updated)
     setEditingId(null)
-    await saveQuestions(updated)
-    setSavedQuestionId(id)
-    if (questionTimer.current) clearTimeout(questionTimer.current)
-    questionTimer.current = setTimeout(() => setSavedQuestionId(null), 2000)
   }
 
-  async function deleteQuestion(id: string) {
-    if (!confirm('Delete this question?')) return
-    const updated = questions.filter((q) => q.id !== id)
-    setQuestions(updated)
-    await saveQuestions(updated)
+  function deleteQuestion(id: string) {
+    setQuestions((prev) => prev.filter((q) => q.id !== id))
   }
 
   async function logout() {
@@ -232,13 +174,13 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
           <span className="text-lg font-black text-indigo-700 tracking-tighter">EWM</span>
           <button
             onClick={logout}
-            title="Logout"
+            title="로그아웃"
             className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
           >
             <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h6a2 2 0 012 2v1" />
             </svg>
-            Logout
+            로그아웃
           </button>
         </div>
 
@@ -251,13 +193,13 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
-            New Task
+            새 과제
           </button>
         </div>
 
         <nav className="flex-1 overflow-y-auto p-2 space-y-1">
           {tasks.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-6">No tasks yet</p>
+            <p className="text-xs text-gray-400 text-center py-6">과제가 없습니다</p>
           ) : (
             tasks.map((task) => (
               <div
@@ -273,13 +215,13 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                   {task.title}
                 </p>
                 <p className="text-[10px] text-gray-400 mt-0.5">
-                  {(task.questions ?? []).length} question{(task.questions ?? []).length !== 1 ? 's' : ''}
+                  {(task.questions ?? []).length}개 질문
                   {task.createdBy ? ` · ${task.createdBy}` : ''}
                 </p>
                 <button
                   onClick={(e) => { e.stopPropagation(); deleteTask(task.id) }}
                   className="absolute right-2 top-3 opacity-0 group-hover:opacity-100 transition rounded p-0.5 text-gray-400 hover:text-red-500"
-                  title="Delete task"
+                  title="과제 삭제"
                 >
                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -301,7 +243,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
               <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
-              Open Google Sheet
+              구글 시트 열기
             </a>
           </div>
         )}
@@ -311,55 +253,39 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
       <main className="flex-1 overflow-y-auto p-6 py-8">
         {!selectedTask ? (
           <div className="flex h-full items-center justify-center">
-            <div className="text-center">
-              <p className="text-gray-400 text-sm">Select a task from the sidebar or create a new one.</p>
-            </div>
+            <p className="text-gray-400 text-sm">사이드바에서 과제를 선택하거나 새 과제를 만드세요.</p>
           </div>
         ) : (
           <div className="mx-auto max-w-2xl space-y-4">
-            <div className="flex items-center gap-2 mb-6">
-              <h1 className="text-lg font-bold text-gray-900">Task Editor</h1>
-              <span className="text-xs text-gray-400">
-                Created {new Date(selectedTask.createdAt).toLocaleDateString()}
-                {selectedTask.createdBy ? ` by ${selectedTask.createdBy}` : ''}
-              </span>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h1 className="text-lg font-bold text-gray-900">과제 편집</h1>
+                <span className="text-xs text-gray-400">
+                  생성일 {new Date(selectedTask.createdAt).toLocaleDateString()}
+                  {selectedTask.createdBy ? ` · ${selectedTask.createdBy}` : ''}
+                </span>
+              </div>
             </div>
 
             {/* Title */}
             <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <div className="mb-3 flex items-center justify-between">
-                <label className="text-sm font-semibold text-gray-700">Task Title</label>
-                <SavedBadge show={titleSaved} />
-              </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                  onBlur={saveTitle}
-                  placeholder="e.g. Chapter 3 Writing"
-                  className="flex-1 rounded-lg border border-gray-300 p-3 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                />
-                <button
-                  onClick={saveTitle}
-                  className="rounded-lg bg-gray-800 px-5 py-2 text-sm font-semibold text-white hover:bg-gray-900"
-                >
-                  저장
-                </button>
-              </div>
+              <label className="mb-3 block text-sm font-semibold text-gray-700">과제 제목</label>
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="예) 3단원 글쓰기"
+                className="w-full rounded-lg border border-gray-300 p-3 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              />
             </div>
 
             {/* Time limit */}
             <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <label className="text-sm font-semibold text-gray-700">Time Limit</label>
-                </div>
-                <SavedBadge show={timeLimitSaved} />
+              <div className="mb-3 flex items-center gap-2">
+                <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <label className="text-sm font-semibold text-gray-700">제한 시간</label>
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-200">
@@ -369,31 +295,23 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                     max={180}
                     value={timeLimit === 0 ? '' : timeLimit}
                     onChange={(e) => setTimeLimit(e.target.value === '' ? 0 : Math.max(0, parseInt(e.target.value) || 0))}
-                    onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }}
-                    onBlur={saveTimeLimit}
                     placeholder="0"
                     className="w-16 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none"
                   />
-                  <span className="text-sm text-gray-400">min</span>
+                  <span className="text-sm text-gray-400">분</span>
                 </div>
-                <button
-                  onClick={saveTimeLimit}
-                  className="rounded-lg bg-gray-800 px-5 py-2 text-sm font-semibold text-white hover:bg-gray-900"
-                >
-                  저장
-                </button>
                 {timeLimit > 0 && (
                   <span className="text-sm text-gray-500">학생이 첫 입력 시 타이머 시작</span>
                 )}
               </div>
-              <p className="mt-2 text-xs text-gray-400">Set to 0 to disable. Max 180 minutes.</p>
+              <p className="mt-2 text-xs text-gray-400">0으로 설정하면 비활성화됩니다. 최대 180분.</p>
             </div>
 
             {/* Question list */}
             <div className="space-y-3">
               {questions.length === 0 && (
                 <div className="rounded-2xl border-2 border-dashed border-gray-200 py-10 text-center">
-                  <p className="text-sm text-gray-400">No questions yet. Add one below.</p>
+                  <p className="text-sm text-gray-400">질문이 없습니다. 아래에서 추가하세요.</p>
                 </div>
               )}
               {questions.map((q, i) => (
@@ -414,12 +332,12 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                           onChange={(e) => setEditType(e.target.value as 'text' | 'textarea')}
                           className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:outline-none"
                         >
-                          <option value="textarea">Long answer</option>
-                          <option value="text">Short answer</option>
+                          <option value="textarea">서술형</option>
+                          <option value="text">단답형</option>
                         </select>
                         <div className="flex gap-2">
-                          <button onClick={() => setEditingId(null)} className="rounded-lg border border-gray-200 px-4 py-2 text-xs text-gray-600 hover:bg-gray-50">Cancel</button>
-                          <button onClick={() => saveEdit(q.id)} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700">Save</button>
+                          <button onClick={() => setEditingId(null)} className="rounded-lg border border-gray-200 px-4 py-2 text-xs text-gray-600 hover:bg-gray-50">취소</button>
+                          <button onClick={() => applyEdit(q.id)} className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700">적용</button>
                         </div>
                       </div>
                     </div>
@@ -432,23 +350,20 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                         <div className="markdown text-sm font-medium text-gray-900">
                           <ReactMarkdown>{q.text}</ReactMarkdown>
                         </div>
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-xs text-gray-400">{q.type === 'textarea' ? 'Long answer' : 'Short answer'}</span>
-                          <SavedBadge show={savedQuestionId === q.id} />
-                        </div>
+                        <span className="mt-1 text-xs text-gray-400">{q.type === 'textarea' ? '서술형' : '단답형'}</span>
                       </div>
                       <div className="flex shrink-0 gap-2">
                         <button
                           onClick={() => { setEditingId(q.id); setEditText(q.text); setEditType(q.type) }}
                           className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50"
                         >
-                          Edit
+                          수정
                         </button>
                         <button
                           onClick={() => deleteQuestion(q.id)}
                           className="rounded-lg border border-red-200 px-3 py-1.5 text-xs text-red-500 hover:bg-red-50"
                         >
-                          Delete
+                          삭제
                         </button>
                       </div>
                     </div>
@@ -459,23 +374,13 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
 
             {/* Add question */}
             <div className="rounded-2xl bg-white p-6 shadow-sm">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-gray-700">Add Question</h2>
-                {addedFlash && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-700">
-                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Question added
-                  </span>
-                )}
-              </div>
+              <h2 className="mb-3 text-sm font-semibold text-gray-700">질문 추가</h2>
               <div className="space-y-3">
                 <textarea
                   value={newText}
                   onChange={(e) => setNewText(e.target.value)}
                   rows={3}
-                  placeholder="Enter question text… (supports **bold**, *italic*, - lists)"
+                  placeholder="질문을 입력하세요… (**굵게**, *기울임*, - 목록 사용 가능)"
                   className="w-full rounded-lg border border-gray-300 p-3 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 resize-none"
                 />
                 <Preview text={newText} />
@@ -485,8 +390,8 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                     onChange={(e) => setNewType(e.target.value as 'text' | 'textarea')}
                     className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 focus:outline-none"
                   >
-                    <option value="textarea">Long answer</option>
-                    <option value="text">Short answer</option>
+                    <option value="textarea">서술형</option>
+                    <option value="text">단답형</option>
                   </select>
                   <button
                     onClick={addQuestion}
@@ -496,10 +401,36 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                     </svg>
-                    Add
+                    추가
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Save all */}
+            <div className="flex items-center justify-end gap-3 py-2">
+              {allSaved && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-700">
+                  <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  저장되었습니다
+                </span>
+              )}
+              <button
+                onClick={saveAll}
+                disabled={saving}
+                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50 transition"
+              >
+                {saving ? (
+                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+                저장
+              </button>
             </div>
 
             {/* Markdown tips */}
