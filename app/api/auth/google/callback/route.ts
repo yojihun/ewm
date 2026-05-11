@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { findStudentByEmail } from '@/lib/students'
-
-const ALLOWED_EMAILS = (
-  process.env.ALLOWED_TEACHER_EMAILS ||
-  'yojihun@e-mirim.hs.kr,yknym@e-mirim.hs.kr,seho0718@e-mirim.hs.kr'
-)
-  .split(',')
-  .map((e) => e.trim().toLowerCase())
+import { ALLOWED_TEACHER_EMAILS as ALLOWED_EMAILS } from '@/lib/auth'
 
 const TEACHER_NAMES: Record<string, string> = {
   'yojihun@e-mirim.hs.kr': '김지훈',
@@ -33,14 +27,13 @@ export async function GET(req: NextRequest) {
 
   // Parse type from state prefix (e.g. "teacher:uuid" or "student:uuid")
   const authType = storedState?.startsWith('student:') ? 'student' : 'teacher'
-  const errorBase = authType === 'student' ? `${base}/` : `${base}/admin`
 
   if (oauthError || !code) {
-    return debug({ step: 'early_exit', oauthError, hasCode: !!code, base })
+    return debug({ step: 'early_exit', oauthError, hasCode: !!code })
   }
 
   if (!storedState || storedState !== state) {
-    return debug({ step: 'state_mismatch', storedState: storedState ?? null, state, base })
+    return debug({ step: 'state_mismatch' })
   }
 
   try {
@@ -64,7 +57,7 @@ export async function GET(req: NextRequest) {
         student = { studentNumber: 'teacher', name: email.split('@')[0], email }
       }
       if (!student) {
-        return debug({ step: 'student_not_found', email, base })
+        return NextResponse.redirect(`${base}/?error=not_allowed`)
       }
 
       const res = NextResponse.redirect(`${base}/`)
@@ -80,7 +73,7 @@ export async function GET(req: NextRequest) {
 
     // Teacher flow
     if (!ALLOWED_EMAILS.includes(email)) {
-      return debug({ step: 'teacher_not_allowed', email, allowedEmails: ALLOWED_EMAILS, base })
+      return NextResponse.redirect(`${base}/admin?error=not_allowed&email=${encodeURIComponent(email)}`)
     }
 
     const res = NextResponse.redirect(`${base}/admin/dashboard`)
@@ -95,6 +88,6 @@ export async function GET(req: NextRequest) {
     return res
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
-    return debug({ step: 'exception', error: message, base })
+    return debug({ step: 'exception', error: message })
   }
 }
