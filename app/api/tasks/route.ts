@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { readAllTasks, createTask } from '@/lib/tasks'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, requireSession } from '@/lib/auth'
 
 export async function GET() {
+  if (!(await requireSession())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const tasks = await readAllTasks()
   return NextResponse.json(tasks)
 }

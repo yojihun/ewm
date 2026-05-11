@@ -68,3 +68,13 @@ export async function getSession(): Promise<boolean> {
 export async function requireAdmin(): Promise<boolean> {
   return getSession()
 }
+
+// Accepts either a teacher or a valid signed student cookie
+export async function requireSession(): Promise<boolean> {
+  if (await getSession()) return true
+  const cookieStore = await cookies()
+  const raw = cookieStore.get('sf_student')?.value
+  if (!raw) return false
+  const student = await verifyCookie<{ studentNumber: string }>(raw)
+  return student !== null
+}

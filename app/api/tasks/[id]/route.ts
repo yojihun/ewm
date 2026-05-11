@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getTask, updateTask, deleteTask } from '@/lib/tasks'
-import { requireAdmin } from '@/lib/auth'
+import { requireAdmin, requireSession } from '@/lib/auth'
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  if (!(await requireSession())) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
   const { id } = await params
   const task = await getTask(id)
   if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })

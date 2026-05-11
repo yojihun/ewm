@@ -9,10 +9,15 @@ const TEACHER_NAMES: Record<string, string> = {
   'seho0718@e-mirim.hs.kr': '이세호',
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+}
+
 function debug(data: Record<string, unknown>) {
+  const safe = escapeHtml(JSON.stringify(data, null, 2))
   return new Response(
-    `<pre style="font-family:monospace;padding:2rem">${JSON.stringify(data, null, 2)}</pre>`,
-    { status: 200, headers: { 'content-type': 'text/html' } }
+    `<pre style="font-family:monospace;padding:2rem">${safe}</pre>`,
+    { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }
   )
 }
 
