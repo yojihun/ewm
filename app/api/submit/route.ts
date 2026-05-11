@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { appendRow } from '@/lib/sheets'
 import { getTask } from '@/lib/tasks'
 import { sendSubmissionEmail } from '@/lib/email'
+import { verifyCookie } from '@/lib/auth'
+import type { Student } from '@/lib/students'
 
 export async function POST(req: NextRequest) {
+  // Verify student session — rejects forged cookies and cURL without a real browser session
+  const cookieStore = await cookies()
+  const studentRaw = cookieStore.get('sf_student')?.value
+  const session = studentRaw ? await verifyCookie<Student>(studentRaw) : null
+  if (!session) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
   const body = await req.json()
   const {
     taskId,
-    name,
-    studentNumber,
-    email,
     answers,
     tabSwitchCount,
     copyCount,
@@ -20,9 +28,6 @@ export async function POST(req: NextRequest) {
     duplicateSession,
   } = body as {
     taskId: string
-    name: string
-    studentNumber: string
-    email: string
     answers: Record<string, string>
     tabSwitchCount: number
     copyCount: number
@@ -33,9 +38,8 @@ export async function POST(req: NextRequest) {
     duplicateSession: boolean
   }
 
-  if (!name || !studentNumber) {
-    return NextResponse.json({ error: 'Name and student number required' }, { status: 400 })
-  }
+  // Use identity from the signed session — ignores any name/studentNumber/email in the request body
+  const { name, studentNumber, email } = session
 
   if (!taskId) {
     return NextResponse.json({ error: 'taskId is required' }, { status: 400 })

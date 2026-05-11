@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
 import { findStudentByEmail } from '@/lib/students'
-import { ALLOWED_TEACHER_EMAILS as ALLOWED_EMAILS } from '@/lib/auth'
+import { ALLOWED_TEACHER_EMAILS as ALLOWED_EMAILS, signCookie } from '@/lib/auth'
 
 const TEACHER_NAMES: Record<string, string> = {
   'yojihun@e-mirim.hs.kr': '김지훈',
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
       }
 
       const res = NextResponse.redirect(`${base}/`)
-      res.cookies.set('sf_student', JSON.stringify(student), {
+      res.cookies.set('sf_student', await signCookie(student), {
         httpOnly: true,
         sameSite: 'lax',
         path: '/',
@@ -76,9 +76,9 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(`${base}/admin?error=not_allowed&email=${encodeURIComponent(email)}`)
     }
 
-    const res = NextResponse.redirect(`${base}/admin/dashboard`)
     const teacherName = TEACHER_NAMES[email] ?? data.name ?? email.split('@')[0]
-    res.cookies.set('sf_session', JSON.stringify({ name: teacherName, email }), {
+    const res = NextResponse.redirect(`${base}/admin/dashboard`)
+    res.cookies.set('sf_session', await signCookie({ name: teacherName, email }), {
       httpOnly: true,
       sameSite: 'lax',
       path: '/',
