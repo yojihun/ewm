@@ -48,6 +48,7 @@ function FormContent() {
   const [timeLeft, setTimeLeft] = useState(0)
   const [timerStarted, setTimerStarted] = useState(false)
   const [timedOut, setTimedOut] = useState(false)
+  const [cheatingAutoSubmit, setCheatingAutoSubmit] = useState(false)
 
   // Security event states
   const [tabSwitchCount, setTabSwitchCount] = useState(0)
@@ -173,6 +174,7 @@ function FormContent() {
         tabSwitchRef.current += 1
         setTabSwitchCount(tabSwitchRef.current)
         setShowTabWarning(true)
+        doSubmitRef.current(false, true)
       }
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -188,6 +190,7 @@ function FormContent() {
           windowBlurRef.current += 1
           setWindowBlurCount(windowBlurRef.current)
           setShowWindowBlurWarning(true)
+          doSubmitRef.current(false, true)
         }
       }, 150)
     }
@@ -202,6 +205,7 @@ function FormContent() {
       copyRef.current += 1
       setCopyCount(copyRef.current)
       setShowCopyWarning(true)
+      doSubmitRef.current(false, true)
     }
     function handlePaste(e: Event) {
       if (submittingRef.current) return
@@ -209,14 +213,10 @@ function FormContent() {
       pasteRef.current += 1
       setPasteCount(pasteRef.current)
       setShowPasteWarning(true)
+      doSubmitRef.current(false, true)
     }
     function handleKeyDown(e: KeyboardEvent) {
       if (submittingRef.current) return
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') {
-        copyRef.current += 1
-        setCopyCount(copyRef.current)
-        setShowCopyWarning(true)
-      }
       if (e.metaKey && e.key === ' ') {
         spotlightRef.current += 1
         setSpotlightCount(spotlightRef.current)
@@ -235,7 +235,7 @@ function FormContent() {
     }
   }, [])
 
-  const doSubmit = useCallback(async (isAutoSubmit = false) => {
+  const doSubmit = useCallback(async (isAutoSubmit = false, isCheatingSubmit = false) => {
     if (submittingRef.current) return
     const s = studentRef.current
     if (!s) return
@@ -273,6 +273,7 @@ function FormContent() {
         }).catch(() => {})
       }
       if (isAutoSubmit) setTimedOut(true)
+      if (isCheatingSubmit) setCheatingAutoSubmit(true)
       setSubmitted(true)
     } else {
       submittingRef.current = false
@@ -280,6 +281,9 @@ function FormContent() {
       setError(data.error ?? 'Submission failed. Please try again.')
     }
   }, [taskId])
+
+  const doSubmitRef = useRef<(isAutoSubmit?: boolean, isCheatingSubmit?: boolean) => Promise<void>>(async () => {})
+  useEffect(() => { doSubmitRef.current = doSubmit }, [doSubmit])
 
   useEffect(() => {
     if (!timerStarted || timeLimitSecs === 0) return
@@ -338,6 +342,23 @@ function FormContent() {
   }
 
   if (submitted) {
+    if (cheatingAutoSubmit) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-red-100">
+            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+              <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+              </svg>
+            </div>
+            <h2 className="mb-4 text-xl font-bold text-red-700">세션 종료</h2>
+            <p className="text-sm text-red-600 leading-relaxed">
+              부정행위로 의심될 수 있는 활동으로 인해 작성 과정이 종료되었습니다. 다시 세션을 시작하세요.
+            </p>
+          </div>
+        </div>
+      )
+    }
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-10 text-center shadow-[0_4px_12px_rgba(0,0,0,0.05)] border border-slate-100">
@@ -429,9 +450,9 @@ function FormContent() {
             <div>
               <h4 className="font-bold text-amber-900 text-sm">Security Warning: Anti-Cheat Protocol</h4>
               <p className="text-amber-800/80 text-sm mt-1 leading-relaxed">
-                The following actions are monitored and reported to your instructor: copying text, switching browser tabs or windows, switching to another virtual desktop (Mission Control / Windows virtual desktops), activating Spotlight or search tools (⌘Space), refreshing the page, and logging in from multiple devices at the same time.
+                The following actions will <strong>immediately terminate your session and auto-submit</strong>: copying text (Ctrl+C), pasting (Ctrl+V), switching browser tabs or windows, or switching to another virtual desktop. Other monitored events: Spotlight (⌘Space), page refresh, and simultaneous logins from multiple devices.
                 <br />
-                클립보드 사용, 탭/창 전환, 가상 데스크탑 전환(미션 컨트롤 / 윈도우 가상 데스크탑), Spotlight 검색(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속은 모두 기록되어 선생님께 전달됩니다.
+                <strong>복사(Ctrl+C), 붙여넣기(Ctrl+V), 탭/창 전환, 가상 데스크탑 전환</strong>은 즉시 세션을 종료하고 자동 제출됩니다. 그 외 Spotlight(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속도 모두 기록됩니다.
               </p>
             </div>
           </section>
