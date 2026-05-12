@@ -93,7 +93,7 @@ export async function sendSubmissionEmail({
   await getTransporter().sendMail({
     from: `SecureForm <${process.env.GMAIL_USER}>`,
     to,
-    subject: `[${escapeHtml(quizTitle)}] Your submitted answers`,
+    subject: `[${quizTitle}] Your submitted answers`,
     html: `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#1e293b;">
         <h1 style="font-size:20px;font-weight:700;margin:0 0 4px;">${escapeHtml(quizTitle)}</h1>
