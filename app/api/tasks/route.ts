@@ -6,8 +6,14 @@ export async function GET() {
   if (!(await requireSession())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
-  const tasks = await readAllTasks()
-  return NextResponse.json(tasks)
+  try {
+    const tasks = await readAllTasks()
+    return NextResponse.json(tasks)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.error('[tasks GET]', message)
+    return NextResponse.json({ error: 'Unable to load tasks. Please refresh in a moment.' }, { status: 503 })
+  }
 }
 
 export async function POST(req: NextRequest) {

@@ -10,9 +10,15 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
   const { id } = await params
-  const task = await getTask(id)
-  if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  return NextResponse.json(task)
+  try {
+    const task = await getTask(id)
+    if (!task) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    return NextResponse.json(task)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.error('[tasks GET id]', message)
+    return NextResponse.json({ error: 'Unable to load this task. Please refresh in a moment.' }, { status: 503 })
+  }
 }
 
 export async function PUT(

@@ -57,7 +57,17 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const task = await getTask(taskId)
+  let task
+  try {
+    task = await getTask(taskId)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error'
+    console.error('[submit] Task lookup error:', message)
+    return NextResponse.json(
+      { error: 'Temporary task loading error. Please try submitting again in a moment.' },
+      { status: 503 }
+    )
+  }
   if (!task) {
     return NextResponse.json({ error: 'Task not found' }, { status: 404 })
   }

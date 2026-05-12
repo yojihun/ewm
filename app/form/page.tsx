@@ -30,6 +30,24 @@ function formatTime(seconds: number): string {
   return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
+const WINDOW_BLUR_CONFIRM_MS = 400
+
+async function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchJsonWithRetry<T>(url: string, attempts = 3): Promise<{ status: number; data: T | null }> {
+  let lastStatus = 0
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const res = await fetch(url)
+    lastStatus = res.status
+    if (res.ok) return { status: res.status, data: await res.json() as T }
+    if (res.status === 401 || res.status === 404) return { status: res.status, data: null }
+    if (attempt < attempts - 1) await delay(500 * (attempt + 1))
+  }
+  return { status: lastStatus, data: null }
+}
+
 function FormContent() {
   const router = useRouter()
   const params = useSearchParams()
@@ -105,15 +123,21 @@ function FormContent() {
     }
 
     Promise.all([
-      fetch('/api/auth/student').then((r) => r.json()),
-      fetch(`/api/tasks/${taskId}`).then((r) => r.ok ? r.json() : null),
+      fetchJsonWithRetry<{ student: Student | null }>('/api/auth/student'),
+      fetchJsonWithRetry<{ title: string; timeLimit: number; questions: Question[] }>(`/api/tasks/${taskId}`),
     ])
-      .then(([sessionData, taskData]: [{ student: Student | null }, { title: string; timeLimit: number; questions: Question[] } | null]) => {
-        if (!sessionData.student) {
+      .then(([sessionResult, taskResult]) => {
+        const sessionData = sessionResult.data
+        const taskData = taskResult.data
+        if (!sessionData?.student) {
           router.replace('/')
           return
         }
         if (!taskData) {
+          if (taskResult.status !== 404) {
+            setError('과제를 불러오지 못했습니다. 잠시 후 새로고침해주세요. (Could not load this task. Please refresh in a moment.)')
+            return
+          }
           router.replace('/')
           return
         }
@@ -130,7 +154,7 @@ function FormContent() {
         answersRef.current = initial
         questionsRef.current = taskData.questions
       })
-      .catch(() => router.replace('/'))
+      .catch(() => setError('과제를 불러오지 못했습니다. 잠시 후 새로고침해주세요. (Could not load this task. Please refresh in a moment.)'))
       .finally(() => setLoading(false))
   }, [taskId, router])
 
@@ -150,7 +174,10 @@ function FormContent() {
     })
       .then((r) => r.json())
       .then((data: { ok: boolean; duplicate: boolean }) => {
-        if (data.duplicate) setDuplicateSession(true)
+        if (data.duplicate) {
+          setDuplicateSession(true)
+          doSubmitRef.current(false, true)
+        }
       })
       .catch(() => {})
 
@@ -195,18 +222,19 @@ function FormContent() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [])
 
-  // App / virtual desktop switching
+  // App / virtual desktop switching. Confirm the page is still unfocused after a short
+  // delay so harmless blur blips do not trigger a false positive.
   useEffect(() => {
     function handleWindowBlur() {
       if (submittingRef.current) return
       setTimeout(() => {
-        if (!document.hidden) {
+        if (!document.hidden && !document.hasFocus()) {
           windowBlurRef.current += 1
           setWindowBlurCount(windowBlurRef.current)
           setShowWindowBlurWarning(true)
           doSubmitRef.current(false, true)
         }
-      }, 150)
+      }, WINDOW_BLUR_CONFIRM_MS)
     }
     window.addEventListener('blur', handleWindowBlur)
     return () => window.removeEventListener('blur', handleWindowBlur)
@@ -235,6 +263,7 @@ function FormContent() {
         spotlightRef.current += 1
         setSpotlightCount(spotlightRef.current)
         setShowSpotlightWarning(true)
+        doSubmitRef.current(false, true)
       }
     }
     document.addEventListener('copy', handleCopy)
@@ -302,6 +331,11 @@ function FormContent() {
 
   const doSubmitRef = useRef<(isAutoSubmit?: boolean, isCheatingSubmit?: boolean) => Promise<void>>(async () => {})
   useEffect(() => { doSubmitRef.current = doSubmit }, [doSubmit])
+
+  useEffect(() => {
+    if (!student || loading || refreshRef.current === 0 || submittingRef.current) return
+    doSubmitRef.current(false, true)
+  }, [student, loading])
 
   useEffect(() => {
     if (!timerStarted || timeLimitSecs === 0) return
@@ -468,9 +502,9 @@ function FormContent() {
             <div>
               <h4 className="font-bold text-amber-900 text-sm">Security Warning: Anti-Cheat Protocol</h4>
               <p className="text-amber-800/80 text-sm mt-1 leading-relaxed">
-                The following actions will <strong>immediately terminate your session and auto-submit</strong>: copying text (Ctrl+C), pasting (Ctrl+V), switching browser tabs or windows, or switching to another virtual desktop. Other monitored events: Spotlight (⌘Space), page refresh, and simultaneous logins from multiple devices.
+                The following actions will <strong>immediately terminate your session and auto-submit</strong>: copying text (Ctrl+C), pasting (Ctrl+V), switching browser tabs, switching away to another app/window or virtual desktop, using Spotlight (⌘Space), refreshing the page, or logging in from multiple devices.
                 <br />
-                <strong>복사(Ctrl+C), 붙여넣기(Ctrl+V), 탭/창 전환, 가상 데스크탑 전환</strong>은 즉시 세션을 종료하고 자동 제출됩니다. 그 외 Spotlight(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속도 모두 기록됩니다.
+                <strong>복사(Ctrl+C), 붙여넣기(Ctrl+V), 브라우저 탭 전환, 다른 앱/창 또는 가상 데스크탑 전환, Spotlight(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속</strong>은 즉시 세션을 종료하고 자동 제출됩니다.
               </p>
             </div>
           </section>

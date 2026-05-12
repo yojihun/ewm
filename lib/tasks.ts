@@ -16,6 +16,12 @@ export interface Task {
 }
 
 const TASKS_TAB = '_tasks'
+const TASK_READ_RETRIES = 2
+const TASK_READ_RETRY_DELAY_MS = 400
+
+function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 function getSheetsClient() {
   const auth = new google.auth.GoogleAuth({
@@ -46,24 +52,31 @@ export async function readAllTasks(): Promise<Task[]> {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID
   if (!spreadsheetId || !process.env.GOOGLE_PRIVATE_KEY) return []
 
-  try {
-    const sheets = getSheetsClient()
-    await ensureTasksTab(sheets, spreadsheetId)
+  let lastError: unknown
+  for (let attempt = 0; attempt <= TASK_READ_RETRIES; attempt += 1) {
+    try {
+      const sheets = getSheetsClient()
+      await ensureTasksTab(sheets, spreadsheetId)
 
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `'${TASKS_TAB}'!A1`,
-    })
+      const res = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: `'${TASKS_TAB}'!A1`,
+      })
 
-    const json = res.data.values?.[0]?.[0]
-    if (!json) return []
+      const json = res.data.values?.[0]?.[0]
+      if (!json) return []
 
-    const parsed = JSON.parse(json)
-    if (!Array.isArray(parsed)) return []
-    return parsed.map((t: Task) => ({ ...t, questions: t.questions ?? [] }))
-  } catch {
-    return []
+      const parsed = JSON.parse(json)
+      if (!Array.isArray(parsed)) return []
+      return parsed.map((t: Task) => ({ ...t, questions: t.questions ?? [] }))
+    } catch (err) {
+      lastError = err
+      if (attempt < TASK_READ_RETRIES) await delay(TASK_READ_RETRY_DELAY_MS)
+    }
   }
+
+  const message = lastError instanceof Error ? lastError.message : 'Unknown Google Sheets error'
+  throw new Error(`Failed to read tasks from Google Sheets: ${message}`)
 }
 
 export async function writeAllTasks(tasks: Task[]): Promise<void> {

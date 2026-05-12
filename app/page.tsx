@@ -16,6 +16,25 @@ interface Task {
   createdBy: string
 }
 
+async function delay(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function fetchTasksWithRetry() {
+  let lastStatus = 0
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const res = await fetch('/api/tasks')
+    lastStatus = res.status
+    if (res.status === 401) return { unauthorized: true, tasks: [] as Task[] }
+    if (res.ok) {
+      const data = await res.json()
+      return { unauthorized: false, tasks: Array.isArray(data) ? data as Task[] : [] }
+    }
+    if (attempt < 2) await delay(500 * (attempt + 1))
+  }
+  throw new Error(`Task request failed (${lastStatus})`)
+}
+
 const ERROR_MESSAGES: Record<string, string> = {
   not_allowed: '이 계정은 등록된 학생 계정이 아닙니다. (Account not in student roster)',
   oauth_cancelled: '로그인이 취소되었습니다. (Sign-in cancelled)',
@@ -44,6 +63,7 @@ function HomeContent() {
   const [student, setStudent] = useState<Student | null | undefined>(undefined)
   const [tasks, setTasks] = useState<Task[]>([])
   const [loadingTasks, setLoadingTasks] = useState(false)
+  const [taskError, setTaskError] = useState('')
 
   const errorMsg = errorKey ? (ERROR_MESSAGES[errorKey] ?? '알 수 없는 오류가 발생했습니다.') : null
   const errorDetail = errorKey === 'not_allowed' && errorEmail ? ` (${errorEmail})` : ''
@@ -57,19 +77,33 @@ function HomeContent() {
 
   useEffect(() => {
     if (!student) return
-    setLoadingTasks(true)
-    fetch('/api/tasks')
-      .then((r) => {
-        if (r.status === 401) {
-          // Session expired or cookie invalid — force re-login
+    let cancelled = false
+
+    async function loadTasks() {
+      setLoadingTasks(true)
+      setTaskError('')
+      try {
+        const data = await fetchTasksWithRetry()
+        if (cancelled) return
+        if (data.unauthorized) {
           setStudent(null)
-          return []
+          setTasks([])
+          return
         }
-        return r.ok ? r.json() : []
-      })
-      .then((data: Task[]) => setTasks(Array.isArray(data) ? data : []))
-      .catch(() => setTasks([]))
-      .finally(() => setLoadingTasks(false))
+        setTasks(data.tasks)
+      } catch {
+        if (cancelled) return
+        setTasks([])
+        setTaskError('과제를 불러오지 못했습니다. 잠시 후 새로고침해주세요. (Could not load tasks. Please refresh in a moment.)')
+      } finally {
+        if (!cancelled) setLoadingTasks(false)
+      }
+    }
+
+    loadTasks()
+    return () => {
+      cancelled = true
+    }
   }, [student])
 
   async function handleLogout() {
@@ -158,6 +192,10 @@ function HomeContent() {
           {loadingTasks ? (
             <div className="flex items-center justify-center py-16">
               <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          ) : taskError ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+              {taskError}
             </div>
           ) : tasks.length === 0 ? (
             <div className="rounded-2xl border-2 border-dashed border-slate-200 py-16 text-center">
