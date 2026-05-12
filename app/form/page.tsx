@@ -166,6 +166,20 @@ function FormContent() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [student])
 
+  // Heartbeat — keeps the server session entry fresh so stale detection works
+  useEffect(() => {
+    if (!student) return
+    const id = setInterval(() => {
+      if (submittingRef.current) return
+      fetch('/api/session', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentNumber: student.studentNumber, sessionToken: sessionTokenRef.current }),
+      }).catch(() => {})
+    }, 30_000)
+    return () => clearInterval(id)
+  }, [student])
+
   // Tab switching — fires when the browser tab/page becomes hidden
   useEffect(() => {
     function handleVisibilityChange() {
