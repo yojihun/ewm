@@ -38,7 +38,8 @@ export async function GET(req: NextRequest) {
   }
 
   if (!storedState || storedState !== state) {
-    return debug({ step: 'state_mismatch' })
+    const loginBase = state?.startsWith('student:') ? `${base}/` : `${base}/admin`
+    return NextResponse.redirect(`${loginBase}?error=invalid_state`)
   }
 
   try {
