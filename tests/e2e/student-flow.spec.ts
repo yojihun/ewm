@@ -153,6 +153,26 @@ test('spotlight shortcut auto-submits the session', async ({ page }) => {
   expect(submitRequests).toBe(1)
 })
 
+test('session POST without valid student cookie returns 401', async ({ page }) => {
+  // Navigate somewhere to be on the same origin
+  await page.route('**/api/auth/student', (route) =>
+    route.fulfill({ json: { student: null } })
+  )
+  await page.goto('/')
+
+  const res = await page.evaluate(async () => {
+    const r = await fetch('/api/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // No sf_student cookie — just raw body fields
+      body: JSON.stringify({ studentNumber: '1101', sessionToken: 'fake-token' }),
+    })
+    return r.status
+  })
+
+  expect(res).toBe(401)
+})
+
 test('duplicate session auto-submits the current session', async ({ page }) => {
   await page.route('**/api/auth/student', async (route) => {
     await route.fulfill({ json: { student } })

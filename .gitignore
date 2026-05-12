@@ -47,3 +47,7 @@ questions.json
 next-env.d.ts
 
 .vercel
+
+# playwright
+test-results/
+playwright-report/

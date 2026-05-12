@@ -26,6 +26,7 @@ export default function SecureTextarea({
         value={value}
         rows={rows}
         placeholder={placeholder}
+        maxLength={1000}
         className="w-full rounded-xl border border-slate-200 bg-slate-50 focus:border-primary focus:ring-4 focus:ring-indigo-500/10 transition-all p-5 placeholder:text-slate-400 text-base resize-none outline-none"
         onChange={(e) => onChange(e.target.value)}
         onPaste={(e) => e.preventDefault()}

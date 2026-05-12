@@ -62,7 +62,7 @@ export async function GET(req: NextRequest) {
         student = { studentNumber: 'teacher', name: email.split('@')[0], email }
       }
       if (!student) {
-        return NextResponse.redirect(`${base}/?error=not_allowed`)
+        return NextResponse.redirect(`${base}/?error=not_allowed&email=${encodeURIComponent(email)}`)
       }
 
       const res = NextResponse.redirect(`${base}/`)
