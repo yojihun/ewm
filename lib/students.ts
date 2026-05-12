@@ -153,6 +153,7 @@ const STUDENTS: Student[] = [
   { studentNumber: '2214', name: '조성찬', email: 's2534@e-mirim.hs.kr' },
   { studentNumber: '2215', name: '조은희', email: 's2535@e-mirim.hs.kr' },
   { studentNumber: '2216', name: '조정모', email: 's2571@e-mirim.hs.kr' },
+  { studentNumber: '2217', name: '최한이', email: 's2555@e-mirim.hs.kr' },
   // 2-3
   { studentNumber: '2301', name: '공은성', email: 's2557@e-mirim.hs.kr' },
   { studentNumber: '2302', name: '김세주', email: 's2504@e-mirim.hs.kr' },

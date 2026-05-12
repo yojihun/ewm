@@ -59,7 +59,14 @@ function HomeContent() {
     if (!student) return
     setLoadingTasks(true)
     fetch('/api/tasks')
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 401) {
+          // Session expired or cookie invalid — force re-login
+          setStudent(null)
+          return []
+        }
+        return r.ok ? r.json() : []
+      })
       .then((data: Task[]) => setTasks(Array.isArray(data) ? data : []))
       .catch(() => setTasks([]))
       .finally(() => setLoadingTasks(false))

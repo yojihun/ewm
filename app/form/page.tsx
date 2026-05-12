@@ -275,6 +275,10 @@ function FormContent() {
       if (isAutoSubmit) setTimedOut(true)
       if (isCheatingSubmit) setCheatingAutoSubmit(true)
       setSubmitted(true)
+    } else if (isCheatingSubmit) {
+      // Show termination screen even if the API failed — student shouldn't be able to continue
+      setCheatingAutoSubmit(true)
+      setSubmitted(true)
     } else {
       submittingRef.current = false
       const data = await res.json().catch(() => ({}))
