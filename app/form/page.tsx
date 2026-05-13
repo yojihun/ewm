@@ -31,6 +31,7 @@ function formatTime(seconds: number): string {
 }
 
 const WINDOW_BLUR_CONFIRM_MS = 400
+const SESSION_TOKEN_PREFIX = 'sf_session_token:'
 
 async function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -46,6 +47,19 @@ async function fetchJsonWithRetry<T>(url: string, attempts = 3): Promise<{ statu
     if (attempt < attempts - 1) await delay(500 * (attempt + 1))
   }
   return { status: lastStatus, data: null }
+}
+
+function getSessionToken(studentNumber: string): string {
+  const key = `${SESSION_TOKEN_PREFIX}${studentNumber}`
+  const existing = sessionStorage.getItem(key)
+  if (existing) return existing
+
+  const token =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+  sessionStorage.setItem(key, token)
+  return token
 }
 
 function FormContent() {
@@ -96,6 +110,7 @@ function FormContent() {
   const duplicateSessionRef = useRef(false)
   const sessionTokenRef = useRef('')
   const studentRef = useRef<Student | null>(null)
+  const doSubmitRef = useRef<(isAutoSubmit?: boolean, isCheatingSubmit?: boolean) => Promise<void>>(async () => {})
 
   useEffect(() => { answersRef.current = answers }, [answers])
   useEffect(() => { questionsRef.current = questions }, [questions])
@@ -110,8 +125,10 @@ function FormContent() {
       const count = prev + 1
       sessionStorage.setItem('sf_refresh', String(count))
       refreshRef.current = count
-      setRefreshCount(count)
-      setShowRefreshWarning(true)
+      queueMicrotask(() => {
+        setRefreshCount(count)
+        setShowRefreshWarning(true)
+      })
     }
   }, [])
 
@@ -161,10 +178,7 @@ function FormContent() {
   // Session registration — detects duplicate logins from another device/browser
   useEffect(() => {
     if (!student) return
-    const token =
-      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`
+    const token = getSessionToken(student.studentNumber)
     sessionTokenRef.current = token
 
     fetch('/api/session', {
@@ -329,7 +343,6 @@ function FormContent() {
     }
   }, [taskId])
 
-  const doSubmitRef = useRef<(isAutoSubmit?: boolean, isCheatingSubmit?: boolean) => Promise<void>>(async () => {})
   useEffect(() => { doSubmitRef.current = doSubmit }, [doSubmit])
 
   useEffect(() => {

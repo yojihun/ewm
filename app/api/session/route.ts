@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
     existing.token !== sessionToken &&
     now - existing.lastSeen < STALE_MS
 
-  activeSessions.set(studentNumber, { token: sessionToken, lastSeen: now })
+  if (!duplicate) {
+    activeSessions.set(studentNumber, { token: sessionToken, lastSeen: now })
+  }
   return NextResponse.json({ ok: true, duplicate })
 }
 

@@ -18,6 +18,12 @@ export interface Task {
 const TASKS_TAB = '_tasks'
 const TASK_READ_RETRIES = 2
 const TASK_READ_RETRY_DELAY_MS = 400
+const TASK_CACHE_TTL_MS = 30_000
+
+let cachedTasks: Task[] | null = null
+let cachedTasksAt = 0
+let readTasksPromise: Promise<Task[]> | null = null
+let ensuredTasksTabFor: string | null = null
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -38,6 +44,7 @@ async function ensureTasksTab(
   sheets: ReturnType<typeof getSheetsClient>,
   spreadsheetId: string
 ) {
+  if (ensuredTasksTabFor === spreadsheetId) return
   const meta = await sheets.spreadsheets.get({ spreadsheetId })
   const exists = meta.data.sheets?.some((s) => s.properties?.title === TASKS_TAB)
   if (!exists) {
@@ -46,9 +53,34 @@ async function ensureTasksTab(
       requestBody: { requests: [{ addSheet: { properties: { title: TASKS_TAB } } }] },
     })
   }
+  ensuredTasksTabFor = spreadsheetId
 }
 
 export async function readAllTasks(): Promise<Task[]> {
+  const now = Date.now()
+  if (cachedTasks && now - cachedTasksAt < TASK_CACHE_TTL_MS) {
+    return cachedTasks
+  }
+  if (readTasksPromise) return readTasksPromise
+
+  readTasksPromise = readAllTasksFromSheets()
+    .then((tasks) => {
+      cachedTasks = tasks
+      cachedTasksAt = Date.now()
+      return tasks
+    })
+    .catch((err) => {
+      if (cachedTasks) return cachedTasks
+      throw err
+    })
+    .finally(() => {
+      readTasksPromise = null
+    })
+
+  return readTasksPromise
+}
+
+async function readAllTasksFromSheets(): Promise<Task[]> {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID
   if (!spreadsheetId || !process.env.GOOGLE_PRIVATE_KEY) return []
 
@@ -79,6 +111,11 @@ export async function readAllTasks(): Promise<Task[]> {
   throw new Error(`Failed to read tasks from Google Sheets: ${message}`)
 }
 
+function invalidateTaskCache() {
+  cachedTasks = null
+  cachedTasksAt = 0
+}
+
 export async function writeAllTasks(tasks: Task[]): Promise<void> {
   const spreadsheetId = process.env.GOOGLE_SHEET_ID
   if (!spreadsheetId || !process.env.GOOGLE_PRIVATE_KEY) return
@@ -92,6 +129,7 @@ export async function writeAllTasks(tasks: Task[]): Promise<void> {
     valueInputOption: 'RAW',
     requestBody: { values: [[JSON.stringify(tasks)]] },
   })
+  invalidateTaskCache()
 }
 
 export async function getTask(id: string): Promise<Task | null> {
