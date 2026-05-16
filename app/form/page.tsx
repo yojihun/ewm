@@ -254,15 +254,8 @@ function FormContent() {
     return () => window.removeEventListener('blur', handleWindowBlur)
   }, [])
 
-  // Copy / paste / select-all / Spotlight shortcut detection
+  // Paste / Spotlight shortcut detection
   useEffect(() => {
-    function handleCopy() {
-      if (submittingRef.current) return
-      copyRef.current += 1
-      setCopyCount(copyRef.current)
-      setShowCopyWarning(true)
-      doSubmitRef.current(false, true)
-    }
     function handlePaste(e: Event) {
       if (submittingRef.current) return
       e.preventDefault()
@@ -280,13 +273,9 @@ function FormContent() {
         doSubmitRef.current(false, true)
       }
     }
-    document.addEventListener('copy', handleCopy)
-    document.addEventListener('cut', handleCopy)
     document.addEventListener('paste', handlePaste)
     document.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.removeEventListener('copy', handleCopy)
-      document.removeEventListener('cut', handleCopy)
       document.removeEventListener('paste', handlePaste)
       document.removeEventListener('keydown', handleKeyDown)
     }
@@ -418,7 +407,10 @@ function FormContent() {
             </div>
             <h2 className="mb-4 text-xl font-bold text-red-700">세션 종료</h2>
             <p className="text-sm text-red-600 leading-relaxed">
-              부정행위로 의심될 수 있는 활동으로 인해 작성 과정이 종료되었습니다. 다시 세션을 시작하세요.
+              작성 규칙에 맞지 않는 동작이 감지되어 쓰기 활동이 종료되었습니다.
+            </p>
+            <p className="mt-3 text-sm text-red-500 leading-relaxed">
+              뒤로 가기 또는 새로 브라우저를 시작해서 다시 쓰기 활동을 하세요.
             </p>
           </div>
         </div>
@@ -513,11 +505,11 @@ function FormContent() {
               warning
             </span>
             <div>
-              <h4 className="font-bold text-amber-900 text-sm">Security Warning: Anti-Cheat Protocol</h4>
+              <h4 className="font-bold text-amber-900 text-sm">Writing Instructions / 작성 안내</h4>
               <p className="text-amber-800/80 text-sm mt-1 leading-relaxed">
-                The following actions will <strong>immediately terminate your session and auto-submit</strong>: copying text (Ctrl+C), pasting (Ctrl+V), switching browser tabs, switching away to another app/window or virtual desktop, using Spotlight (⌘Space), refreshing the page, or logging in from multiple devices.
+                Please stay on this page and type your answer directly in the browser. Do not paste text (Ctrl+V), switch browser tabs, switch to another app, window, or virtual desktop, use Spotlight (⌘Space), refresh the page, or log in from multiple devices. These actions will immediately end the session and auto-submit your work.
                 <br />
-                <strong>복사(Ctrl+C), 붙여넣기(Ctrl+V), 브라우저 탭 전환, 다른 앱/창 또는 가상 데스크탑 전환, Spotlight(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속</strong>은 즉시 세션을 종료하고 자동 제출됩니다.
+                브라우저 안에서 직접 작성하세요. <strong>붙여넣기(Ctrl+V), 브라우저 탭 전환, 다른 앱/창 또는 가상 데스크탑 전환, Spotlight(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속</strong>은 즉시 세션을 종료하고 자동 제출됩니다.
               </p>
             </div>
           </section>
@@ -577,21 +569,6 @@ function FormContent() {
                 </p>
               </div>
               <button onClick={() => setShowSpotlightWarning(false)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </section>
-          )}
-
-          {/* Copy warning */}
-          {showCopyWarning && (
-            <section className="bg-red-50 border border-red-200 rounded-xl p-5 flex items-start justify-between gap-4 shadow-sm">
-              <div className="flex gap-4">
-                <span className="material-symbols-outlined text-red-500 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>content_copy</span>
-                <p className="text-sm text-red-700 font-medium">
-                  복사가 감지되었습니다 — Copy / Select-all detected ({copyCount}회). 이 기록은 제출 시 선생님께 전달됩니다.
-                </p>
-              </div>
-              <button onClick={() => setShowCopyWarning(false)} className="shrink-0 text-red-400 hover:text-red-600 transition-colors">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </section>
