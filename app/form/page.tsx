@@ -499,17 +499,15 @@ function FormContent() {
             </section>
           )}
 
-          {/* Security warning banner */}
+          {/* Writing instructions banner */}
           <section className="bg-amber-50 border border-amber-200 rounded-xl p-5 flex gap-4 shadow-sm">
             <span className="material-symbols-outlined text-amber-600 mt-0.5 shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>
-              warning
+              edit_note
             </span>
             <div>
-              <h4 className="font-bold text-amber-900 text-sm">Writing Instructions / 작성 안내</h4>
+              <h4 className="font-bold text-amber-900 text-sm">작성 안내</h4>
               <p className="text-amber-800/80 text-sm mt-1 leading-relaxed">
-                Please stay on this page and type your answer directly in the browser. Do not paste text (Ctrl+V), switch browser tabs, switch to another app, window, or virtual desktop, use Spotlight (⌘Space), refresh the page, or log in from multiple devices. These actions will immediately end the session and auto-submit your work.
-                <br />
-                브라우저 안에서 직접 작성하세요. <strong>붙여넣기(Ctrl+V), 브라우저 탭 전환, 다른 앱/창 또는 가상 데스크탑 전환, Spotlight(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속</strong>은 즉시 세션을 종료하고 자동 제출됩니다.
+                브라우저 안에서 직접 작성해 주세요. <strong>붙여넣기(Ctrl+V), 브라우저 탭 전환, 다른 앱·창·가상 데스크탑으로 이동, Spotlight(⌘Space) 사용, 페이지 새로고침, 동시 다중 접속</strong>이 감지되면 세션이 종료되고 작성 내용이 자동 제출됩니다.
               </p>
             </div>
           </section>
