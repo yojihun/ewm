@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { readAllTasks, createTask } from '@/lib/tasks'
 import { requireAdmin, requireSession } from '@/lib/auth'
 
+function parseGrade(raw: unknown): 1 | 2 | 3 {
+  const grade = Number(raw)
+  if (grade === 2 || grade === 3) return grade
+  return 1
+}
+
 export async function GET() {
   if (!(await requireSession())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -24,6 +30,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const task = await createTask({
       title: body.title ?? 'Untitled Task',
+      grade: parseGrade(body.grade),
       timeLimit: Number(body.timeLimit) || 0,
       questions: body.questions ?? [],
       createdBy: body.createdBy ?? '',

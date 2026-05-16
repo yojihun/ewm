@@ -10,13 +10,22 @@ interface Question {
   type: 'text' | 'textarea'
 }
 
+type TaskGrade = 1 | 2 | 3
+
 interface Task {
   id: string
   title: string
+  grade: TaskGrade
   timeLimit: number
   questions: Question[]
   createdBy: string
   createdAt: string
+}
+
+const GRADE_OPTIONS: TaskGrade[] = [1, 2, 3]
+
+function gradeLabel(grade: TaskGrade) {
+  return `${grade}학년`
 }
 
 function Preview({ text }: { text: string }) {
@@ -49,6 +58,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
 
   // Per-task editor state (local until Save is clicked)
   const [title, setTitle] = useState('')
+  const [grade, setGrade] = useState<TaskGrade>(1)
   const [timeLimit, setTimeLimit] = useState(0)
   const [questions, setQuestions] = useState<Question[]>([])
   const [newText, setNewText] = useState('')
@@ -74,6 +84,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
   function selectTask(task: Task) {
     setSelectedId(task.id)
     setTitle(task.title)
+    setGrade(task.grade ?? 1)
     setTimeLimit(task.timeLimit ?? 0)
     setQuestions(task.questions ?? [])
     setEditingId(null)
@@ -88,7 +99,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
       const res = await fetch(`/api/tasks/${selectedId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, timeLimit, questions }),
+        body: JSON.stringify({ title, grade, timeLimit, questions }),
       })
       if (res.status === 401) { router.replace('/admin'); return }
       const updated: Task = await res.json()
@@ -109,7 +120,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: '새 과제', timeLimit: 0, questions: [], createdBy: teacherName }),
+        body: JSON.stringify({ title: '새 과제', grade: 1, timeLimit: 0, questions: [], createdBy: teacherName }),
       })
       if (res.status === 401) { router.replace('/admin'); return }
       const data = await res.json()
@@ -132,7 +143,7 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
     setTasks(remaining)
     if (selectedId === id) {
       if (remaining.length > 0) selectTask(remaining[0])
-      else { setSelectedId(null); setTitle(''); setTimeLimit(0); setQuestions([]); setEditingId(null); setNewText('') }
+      else { setSelectedId(null); setTitle(''); setGrade(1); setTimeLimit(0); setQuestions([]); setEditingId(null); setNewText('') }
     }
   }
 
@@ -218,6 +229,8 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                   {task.title}
                 </p>
                 <p className="text-[10px] text-gray-400 mt-0.5">
+                  {gradeLabel(task.grade ?? 1)}
+                  {' · '}
                   {(task.questions ?? []).length}개 질문
                   {task.createdBy ? ` · ${task.createdBy}` : ''}
                 </p>
@@ -280,6 +293,33 @@ export default function AdminDashboard({ sheetId }: { sheetId: string | null }) 
                 placeholder="예) 3단원 글쓰기"
                 className="w-full rounded-lg border border-gray-300 p-3 text-sm font-medium text-gray-900 placeholder:font-normal placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
               />
+            </div>
+
+            <div className="rounded-2xl bg-white p-6 shadow-sm">
+              <label className="mb-3 block text-sm font-semibold text-gray-700">학년</label>
+              <div className="flex flex-wrap gap-3">
+                {GRADE_OPTIONS.map((option) => (
+                  <label
+                    key={option}
+                    className={`flex cursor-pointer items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium transition ${
+                      grade === option
+                        ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
+                        : 'border-gray-200 text-gray-600 hover:border-indigo-200 hover:bg-indigo-50/40'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="grade"
+                      value={option}
+                      checked={grade === option}
+                      onChange={() => setGrade(option)}
+                      className="h-4 w-4 accent-indigo-600"
+                    />
+                    {gradeLabel(option)}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-gray-400">학생 화면에서 학년별 컬럼에 이 과제가 표시됩니다.</p>
             </div>
 
             {/* Time limit */}

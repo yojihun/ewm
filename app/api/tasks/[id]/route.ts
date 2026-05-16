@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getTask, updateTask, deleteTask } from '@/lib/tasks'
 import { requireAdmin, requireSession } from '@/lib/auth'
 
+function parseGrade(raw: unknown): 1 | 2 | 3 | undefined {
+  if (raw === undefined) return undefined
+  const grade = Number(raw)
+  if (grade === 2 || grade === 3) return grade
+  return 1
+}
+
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -32,6 +39,7 @@ export async function PUT(
   const body = await req.json()
   const updated = await updateTask(id, {
     title: body.title,
+    grade: parseGrade(body.grade),
     timeLimit: body.timeLimit !== undefined ? Number(body.timeLimit) : undefined,
     questions: body.questions,
   })

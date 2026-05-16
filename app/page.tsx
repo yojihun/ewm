@@ -9,11 +9,20 @@ interface Student {
   email: string
 }
 
+type TaskGrade = 1 | 2 | 3
+
 interface Task {
   id: string
   title: string
+  grade: TaskGrade
   timeLimit: number
   createdBy: string
+}
+
+const GRADE_COLUMNS: TaskGrade[] = [1, 2, 3]
+
+function gradeLabel(grade: TaskGrade) {
+  return `${grade}학년`
 }
 
 async function delay(ms: number) {
@@ -162,6 +171,11 @@ function HomeContent() {
   }
 
   // Logged in — show task list
+  const groupedTasks = GRADE_COLUMNS.map((grade) => ({
+    grade,
+    tasks: tasks.filter((task) => (task.grade ?? 1) === grade),
+  }))
+
   return (
     <div className="min-h-screen bg-background security-bg flex flex-col overflow-x-hidden">
       <header className="bg-white border-b border-slate-200 shadow-sm flex justify-between items-center w-full px-6 h-16">
@@ -181,12 +195,12 @@ function HomeContent() {
       </header>
 
       <main className="flex-grow flex flex-col items-center p-6">
-        <div className="w-full max-w-lg mt-8">
+        <div className="w-full max-w-7xl mt-8">
           <h2 className="text-2xl font-bold text-on-surface mb-1">
             안녕하세요, {student.name}!
           </h2>
           <p className="text-sm text-on-surface-variant mb-8">
-            Select a writing task to begin your assessment.
+            Select a writing task by grade to begin your assessment.
           </p>
 
           {loadingTasks ? (
@@ -206,35 +220,65 @@ function HomeContent() {
               <p className="text-xs text-slate-300 mt-1">Check back later or ask your teacher.</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {tasks.map((task) => (
-                <button
-                  key={task.id}
-                  onClick={() => router.push(`/form?taskId=${task.id}`)}
-                  className="w-full text-left rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all p-6 group"
+            <div className="grid gap-5 lg:grid-cols-3">
+              {groupedTasks.map(({ grade, tasks: gradeTasks }) => (
+                <section
+                  key={grade}
+                  className="rounded-3xl border border-slate-200/80 bg-white/85 p-5 shadow-sm backdrop-blur-sm"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-base font-semibold text-on-surface group-hover:text-indigo-700 transition-colors">
-                        {task.title}
-                      </h3>
-                      <div className="flex items-center gap-3 mt-2">
-                        {task.timeLimit > 0 && (
-                          <span className="inline-flex items-center gap-1 text-xs text-slate-500">
-                            <span className="material-symbols-outlined text-[14px]">timer</span>
-                            {task.timeLimit} min
-                          </span>
-                        )}
-                        {task.createdBy && (
-                          <span className="text-xs text-slate-400">by {task.createdBy}</span>
-                        )}
-                      </div>
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800">{gradeLabel(grade)}</h3>
+                      <p className="text-xs text-slate-400">{gradeTasks.length} task{gradeTasks.length !== 1 ? 's' : ''}</p>
                     </div>
-                    <span className="material-symbols-outlined text-slate-300 group-hover:text-indigo-400 transition-colors shrink-0 mt-1">
-                      arrow_forward
+                    <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-600">
+                      Grade {grade}
                     </span>
                   </div>
-                </button>
+
+                  {gradeTasks.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-10 text-center">
+                      <p className="text-sm text-slate-400">아직 등록된 과제가 없습니다.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {gradeTasks.map((task) => (
+                        <button
+                          key={task.id}
+                          onClick={() => router.push(`/form?taskId=${task.id}`)}
+                          className="w-full text-left rounded-2xl bg-white border border-slate-200 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all p-5 group"
+                        >
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="mb-2">
+                                <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">
+                                  {gradeLabel(task.grade ?? 1)}
+                                </span>
+                              </div>
+                              <h4 className="text-base font-semibold text-on-surface group-hover:text-indigo-700 transition-colors">
+                                {task.title}
+                              </h4>
+                              <div className="flex flex-wrap items-center gap-3 mt-2">
+                                {task.timeLimit > 0 && (
+                                  <span className="inline-flex items-center gap-1 text-xs text-slate-500">
+                                    <span className="material-symbols-outlined text-[14px]">timer</span>
+                                    {task.timeLimit} min
+                                  </span>
+                                )}
+                                {task.createdBy && (
+                                  <span className="text-xs text-slate-400">by {task.createdBy}</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="material-symbols-outlined text-slate-300 group-hover:text-indigo-400 transition-colors shrink-0 mt-1">
+                              arrow_forward
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
               ))}
             </div>
           )}

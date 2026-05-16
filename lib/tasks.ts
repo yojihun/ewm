@@ -6,9 +6,12 @@ export interface Question {
   type: 'text' | 'textarea'
 }
 
+export type TaskGrade = 1 | 2 | 3
+
 export interface Task {
   id: string
   title: string
+  grade: TaskGrade
   timeLimit: number
   questions: Question[]
   createdBy: string
@@ -27,6 +30,24 @@ let ensuredTasksTabFor: string | null = null
 
 function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function normalizeGrade(raw: unknown): TaskGrade {
+  const value = Number(raw)
+  if (value === 2 || value === 3) return value
+  return 1
+}
+
+function normalizeTask(task: Partial<Task>): Task {
+  return {
+    id: task.id ?? crypto.randomUUID(),
+    title: task.title ?? 'Untitled Task',
+    grade: normalizeGrade(task.grade),
+    timeLimit: Number(task.timeLimit) || 0,
+    questions: task.questions ?? [],
+    createdBy: task.createdBy ?? '',
+    createdAt: task.createdAt ?? new Date().toISOString(),
+  }
 }
 
 function getSheetsClient() {
@@ -100,7 +121,7 @@ async function readAllTasksFromSheets(): Promise<Task[]> {
 
       const parsed = JSON.parse(json)
       if (!Array.isArray(parsed)) return []
-      return parsed.map((t: Task) => ({ ...t, questions: t.questions ?? [] }))
+      return parsed.map((task) => normalizeTask(task as Partial<Task>))
     } catch (err) {
       lastError = err
       if (attempt < TASK_READ_RETRIES) await delay(TASK_READ_RETRY_DELAY_MS)
@@ -122,12 +143,13 @@ export async function writeAllTasks(tasks: Task[]): Promise<void> {
 
   const sheets = getSheetsClient()
   await ensureTasksTab(sheets, spreadsheetId)
+  const normalizedTasks = tasks.map((task) => normalizeTask(task))
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
     range: `'${TASKS_TAB}'!A1`,
     valueInputOption: 'RAW',
-    requestBody: { values: [[JSON.stringify(tasks)]] },
+    requestBody: { values: [[JSON.stringify(normalizedTasks)]] },
   })
   invalidateTaskCache()
 }
@@ -141,11 +163,7 @@ export async function createTask(
   input: Omit<Task, 'id' | 'createdAt'>
 ): Promise<Task> {
   const tasks = await readAllTasks()
-  const task: Task = {
-    ...input,
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-  }
+  const task = normalizeTask(input)
   await writeAllTasks([...tasks, task])
   return task
 }
@@ -158,7 +176,7 @@ export async function updateTask(
   const idx = tasks.findIndex((t) => t.id === id)
   if (idx === -1) return null
 
-  const updated = { ...tasks[idx], ...patch }
+  const updated = normalizeTask({ ...tasks[idx], ...patch, id, createdBy: tasks[idx].createdBy, createdAt: tasks[idx].createdAt })
   tasks[idx] = updated
   await writeAllTasks(tasks)
   return updated
